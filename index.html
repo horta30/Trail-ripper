@@ -2,20 +2,26 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,orientation=landscape">
+<style id="orient-warn">
+#pw{display:none;position:fixed;inset:0;background:#0d0d0d;z-index:99;justify-content:center;align-items:center;flex-direction:column}
+#pw p{color:#9ae62a;font:bold 18px monospace;margin-top:16px}
+@media(orientation:portrait){#pw{display:flex}}
+</style>
+<div id="pw"><svg width="60" height="60" viewBox="0 0 60 60"><rect x="18" y="5" width="24" height="38" rx="3" fill="none" stroke="#9ae62a" stroke-width="3"/><path d="M5 30 L18 20 L18 40 Z" fill="#e05510"/></svg><p>Rotar pantalla ↻</p></div>
 <title>TRAIL RIPPER — Stage Crono</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#0d0d0d;display:flex;justify-content:center;align-items:center;min-height:100vh;overflow:hidden}
-canvas{display:block;width:400px;height:600px;max-width:100vw;box-shadow:0 0 60px rgba(180,230,0,.2);cursor:crosshair}
-@media(max-width:420px){canvas{width:100vw;height:calc(100vw*1.5)}}
+body{background:#0d0d0d;display:flex;justify-content:center;align-items:center;width:100vw;height:100vh;overflow:hidden}
+canvas{display:block;width:800px;height:450px;max-width:100%;max-height:100vh;box-shadow:0 0 60px rgba(180,230,0,.2);cursor:crosshair}
+@media(max-width:420px){canvas{width:100vw;height:calc(100vw*0.5625)}}
 </style>
 </head>
 <body>
-<canvas id="c" width="400" height="600"></canvas>
+<canvas id="c" width="800" height="450"></canvas>
 <script>
 var cv=document.getElementById('c'),cx=cv.getContext('2d');
-var W=400,H=600,HY=H*.30,RY=H*.63,VPX=W/2;
+var W=800,H=450,HY=H*.34,RY=H*.68,VPX=W/2;
 
 // ─── AUDIO ──────────────────────────────────────────────────────────
 var AC=null;
@@ -48,9 +54,9 @@ function sndCrash(){noise(.35,.5);tone(180,.4,.12,'sawtooth',60);}
 function sndScore(){tone(880,.08,.07,'sine',1100);}
 
 // ─── PERSPECTIVE ───────────────────────────────────────────────────
-function tL(z){return VPX-(36+(270-36)*z)/2;}
-function tR(z){return VPX+(36+(270-36)*z)/2;}
-function wX(n,z){return VPX+n*(36+(270-36)*z)/2;}
+function tL(z){return VPX-(60+(480-60)*z)/2;}
+function tR(z){return VPX+(60+(480-60)*z)/2;}
+function wX(n,z){return VPX+n*(60+(480-60)*z)/2;}
 function wY(z){return HY+(RY-HY)*z;}
 function sc(z){return .10+.90*z;}
 
@@ -61,7 +67,7 @@ var obs=[],spc=0,tsc=0;
 var lastScore=0;
 var keys={},tDir=0,tJump=false;
 var mtns=[];
-for(var xi=0;xi<=W;xi+=18)mtns.push(H*.17+Math.sin(xi*.009)*28+Math.sin(xi*.025)*14);
+for(var xi=0;xi<=W;xi+=18)mtns.push(H*.18+Math.sin(xi*.006)*35+Math.sin(xi*.018)*18);
 
 // ─── CONTROLS ──────────────────────────────────────────────────────
 document.addEventListener('keydown',function(e){
@@ -153,10 +159,10 @@ function pill(x,y,w,h,r){
 
 // ─── LOGO (canvas-rendered, no PNG) ────────────────────────────────
 function drawLogo(){
-  cx.save();cx.translate(W/2-4,22);
+  cx.save();cx.translate(W/2,26);
 
   // Icon: hexagon frame + lightning
-  cx.save();cx.translate(-58,8);cx.scale(.55,.55);
+  cx.save();cx.translate(-68,8);cx.scale(.65,.65);
   // Outer hex
   cx.strokeStyle='#9ae62a';cx.lineWidth=5;
   cx.beginPath();
@@ -173,14 +179,12 @@ function drawLogo(){
   cx.restore();
 
   // "STAGE" text
-  cx.fillStyle='#ffffff';cx.font='bold 17px Impact,Arial Black,sans-serif';
-  cx.textAlign='left';cx.fillText('STAGE',-28,-5);
-  // "CRONO" text
-  cx.fillStyle='#9ae62a';cx.font='bold 20px Impact,Arial Black,sans-serif';
-  cx.fillText('CRONO',-28,16);
-  // tagline
-  cx.fillStyle='rgba(255,255,255,.45)';cx.font='6px Arial,sans-serif';
-  cx.textAlign='center';cx.fillText('THE MOUNTAIN IS RACING',28,28);
+  cx.fillStyle='#ffffff';cx.font='bold 20px Impact,Arial Black,sans-serif';
+  cx.textAlign='left';cx.fillText('STAGE',-30,-5);
+  cx.fillStyle='#9ae62a';cx.font='bold 24px Impact,Arial Black,sans-serif';
+  cx.fillText('CRONO',-30,19);
+  cx.fillStyle='rgba(255,255,255,.45)';cx.font='7px Arial,sans-serif';
+  cx.textAlign='center';cx.fillText('THE MOUNTAIN IS RACING',28,32);
 
   cx.restore();
 }
@@ -232,8 +236,8 @@ function pine(x,y,s){
   }
 }
 function forest(){
-  for(var i=0;i<7;i++){
-    var z=((i/7)+tsc/52*.45)%1,s=sc(z),sy=wY(z);
+  for(var i=0;i<11;i++){
+    var z=((i/11)+tsc/52*.45)%1,s=sc(z),sy=wY(z);
     pine(tL(z)-16*s,sy,s);pine(tR(z)+16*s,sy,s);
   }
 }
@@ -277,167 +281,160 @@ function drawRider(){
   if(phase!=='playing'&&phase!=='gameover')return;
   if(inv>0&&fn%6<3)return;
   var bx=wX(rNX,1),by=RY+rJ;
-  // ground shadow
   if(rJ<-4){
     cx.fillStyle='rgba(0,0,0,'+Math.max(0,.35-(-rJ)*.006)+')';
-    cx.beginPath();cx.ellipse(bx,RY+6,22+(-rJ)*.3,5,0,0,Math.PI*2);cx.fill();
+    cx.beginPath();cx.ellipse(bx,RY+6,22+(-rJ)*.28,4,0,0,Math.PI*2);cx.fill();
   }
   cx.save();cx.translate(bx,by);cx.rotate(rVX*12*Math.PI/180);
 
   if(crash&&cT>0){
     var t=1-cT/40;
     cx.save();cx.rotate(t*1.6);cx.translate(t*28,-t*12);cx.globalAlpha=Math.max(.25,1-t*.6);
-    cx.fillStyle='#e05510';cx.beginPath();cx.ellipse(0,-6,20,11,t*.8,0,Math.PI*2);cx.fill();
+    cx.fillStyle='#e05510';cx.beginPath();cx.ellipse(0,-6,20,11,t*.9,0,Math.PI*2);cx.fill();
     cx.fillStyle='#ddd';cx.beginPath();cx.arc(12,-16,9,0,Math.PI*2);cx.fill();
-    cx.restore();
-    cx.restore();return;
+    cx.restore();cx.restore();return;
   }
 
   var steer=rVX*.18;
 
-  // ── REAR WHEEL  (vertical: seen head-on from behind)
-  var WY=24, WR=21;
-  // tire
-  cx.fillStyle='#111';cx.beginPath();cx.arc(0,WY,WR,0,Math.PI*2);cx.fill();
-  // rim band
-  cx.strokeStyle='#3d3d3d';cx.lineWidth=5;cx.beginPath();cx.arc(0,WY,WR-2,0,Math.PI*2);cx.stroke();
-  // inner rim
-  cx.strokeStyle='#555';cx.lineWidth=2;cx.beginPath();cx.arc(0,WY,WR-6,0,Math.PI*2);cx.stroke();
-  // 5 spokes — radial, no crossing
+  // ══ REAR WHEEL ══
+  // Perspectiva 3/4 trasera: elipse MÁS ALTA que ancha → rueda VERTICAL clara
+  // rx estrecho (profundidad), ry alto (altura real de la rueda)
+  var WCY=22, WRX=13, WRY=20;
+
+  // Sombra de contacto con el suelo
+  cx.fillStyle='rgba(0,0,0,.25)';
+  cx.beginPath();cx.ellipse(0,WCY+WRY-1,WRX+2,4,0,0,Math.PI*2);cx.fill();
+
+  // Tire exterior
+  cx.fillStyle='#0d0d0d';
+  cx.beginPath();cx.ellipse(0,WCY,WRX,WRY,0,0,Math.PI*2);cx.fill();
+  // Tread lateral (knobby effect — franjas que subrayan la verticalidad)
+  cx.strokeStyle='#1a1a1a';cx.lineWidth=2.5;
+  cx.beginPath();cx.ellipse(0,WCY,WRX+1,WRY+1,0,0,Math.PI*2);cx.stroke();
+  // Rim band
+  cx.strokeStyle='#333';cx.lineWidth=5;
+  cx.beginPath();cx.ellipse(0,WCY,WRX-2,WRY-2,0,0,Math.PI*2);cx.stroke();
+  // Inner rim
+  cx.strokeStyle='#555';cx.lineWidth=2;
+  cx.beginPath();cx.ellipse(0,WCY,WRX-5,WRY-5,0,0,Math.PI*2);cx.stroke();
+  // 5 spokes en espacio de la elipse
   cx.strokeStyle='#666';cx.lineWidth=1.8;
   for(var a=0;a<Math.PI*2;a+=Math.PI*2/5){
     cx.beginPath();
-    cx.moveTo(Math.cos(a)*5, WY+Math.sin(a)*5);
-    cx.lineTo(Math.cos(a)*(WR-6), WY+Math.sin(a)*(WR-6));
+    cx.moveTo(Math.cos(a)*4,WCY+Math.sin(a)*4);
+    cx.lineTo(Math.cos(a)*(WRX-5),WCY+Math.sin(a)*(WRY-5));
     cx.stroke();
   }
-  // hub
-  cx.fillStyle='#aaa';cx.beginPath();cx.arc(0,WY,5,0,Math.PI*2);cx.fill();
-  cx.fillStyle='#444';cx.beginPath();cx.arc(0,WY,2.5,0,Math.PI*2);cx.fill();
+  // Hub
+  cx.fillStyle='#999';cx.beginPath();cx.arc(0,WCY,5,0,Math.PI*2);cx.fill();
+  cx.fillStyle='#444';cx.beginPath();cx.arc(0,WCY,2.5,0,Math.PI*2);cx.fill();
 
-  // ── FRAME — seat stays form clear V upward from hub (proves wheel is vertical)
-  cx.strokeStyle='#c84010';cx.lineWidth=3.5;cx.lineCap='round';
-  // left seat stay: hub → left seat junction
-  cx.beginPath();cx.moveTo(-3,WY);cx.lineTo(-9,-20);cx.stroke();
-  // right seat stay: hub → right seat junction
-  cx.beginPath();cx.moveTo(3,WY);cx.lineTo(9,-20);cx.stroke();
-  // seat cross-member
+  // ══ FRAME ══  (seat stays suben en V desde el hub — contexto clave)
+  cx.strokeStyle='#b83808';cx.lineWidth=3.5;cx.lineCap='round';
+  cx.beginPath();cx.moveTo(-2,WCY-4);cx.lineTo(-10,-18);cx.stroke(); // left stay
+  cx.beginPath();cx.moveTo(2,WCY-4);cx.lineTo(10,-18);cx.stroke();  // right stay
   cx.strokeStyle='#ff5520';cx.lineWidth=3;
-  cx.beginPath();cx.moveTo(-9,-20);cx.lineTo(9,-20);cx.stroke();
-  // chainstays (hub to bottom bracket, foreshortened from behind)
-  cx.strokeStyle='#aa3008';cx.lineWidth=3;
-  cx.beginPath();cx.moveTo(-3,WY);cx.lineTo(-6,-2);cx.stroke();
-  cx.beginPath();cx.moveTo(3,WY);cx.lineTo(6,-2);cx.stroke();
-  cx.strokeStyle='#ff5520';cx.lineWidth=4;
-  cx.beginPath();cx.moveTo(-7,-2);cx.lineTo(7,-2);cx.stroke(); // bottom bracket
+  cx.beginPath();cx.moveTo(-10,-18);cx.lineTo(10,-18);cx.stroke();  // seat rail
+  cx.strokeStyle='#b83808';cx.lineWidth=2.5;
+  cx.beginPath();cx.moveTo(0,-18);cx.lineTo(0,-6);cx.stroke();      // seat tube
 
-  // ── FRONT WHEEL — small, peeking above rider, tilts with steering
-  var fRY=Math.max(7,13-Math.abs(steer)*12);
-  cx.fillStyle='#111';cx.beginPath();cx.ellipse(0,-32,12*.55,fRY*.55,steer,0,Math.PI*2);cx.fill();
-  cx.strokeStyle='#444';cx.lineWidth=3;cx.beginPath();cx.ellipse(0,-32,12*.55,fRY*.55,steer,0,Math.PI*2);cx.stroke();
-  // fork tubes from bottom bracket area up to front wheel
+  // ══ RUEDA DELANTERA ══ (elipse también, vista desde atrás)
+  var fX=WRX*.5, fY=Math.max(6,WRY*.5-Math.abs(steer)*8);
+  cx.fillStyle='#0d0d0d';
+  cx.beginPath();cx.ellipse(0,-28,fX,fY,steer,0,Math.PI*2);cx.fill();
+  cx.strokeStyle='#333';cx.lineWidth=3;
+  cx.beginPath();cx.ellipse(0,-28,fX,fY,steer,0,Math.PI*2);cx.stroke();
+  // Fork tubes
   cx.strokeStyle='#999';cx.lineWidth=2;
-  cx.beginPath();cx.moveTo(-5,-2);cx.quadraticCurveTo(-8,-16,-6,-32);cx.stroke();
-  cx.beginPath();cx.moveTo(5,-2);cx.quadraticCurveTo(8,-16,6,-32);cx.stroke();
+  cx.beginPath();cx.moveTo(-4,-6);cx.quadraticCurveTo(-6,-16,-4,-28);cx.stroke();
+  cx.beginPath();cx.moveTo(4,-6);cx.quadraticCurveTo(6,-16,4,-28);cx.stroke();
 
-  // ── LEGS — outside the V frame on both sides
+  // ══ PIERNAS ══ (a los costados de la elipse, no del círculo)
   cx.fillStyle='#16163a';
-  // left thigh (from hip down-outward to knee)
-  cx.beginPath();cx.moveTo(-11,-10);cx.lineTo(-22,5);cx.lineTo(-18,9);cx.lineTo(-7,-6);cx.closePath();cx.fill();
-  // left shin (knee to foot)
-  cx.beginPath();cx.moveTo(-22,5);cx.lineTo(-21,WY+2);cx.lineTo(-17,WY+2);cx.lineTo(-18,5);cx.closePath();cx.fill();
-  // right thigh
-  cx.beginPath();cx.moveTo(11,-10);cx.lineTo(22,5);cx.lineTo(18,9);cx.lineTo(7,-6);cx.closePath();cx.fill();
-  // right shin
-  cx.beginPath();cx.moveTo(22,5);cx.lineTo(21,WY+2);cx.lineTo(17,WY+2);cx.lineTo(18,5);cx.closePath();cx.fill();
-  // shoes
-  cx.fillStyle='#222';
-  cx.beginPath();cx.moveTo(-25,WY+1);cx.lineTo(-13,WY+1);cx.lineTo(-12,WY+5);cx.lineTo(-26,WY+5);cx.closePath();cx.fill();
-  cx.beginPath();cx.moveTo(25,WY+1);cx.lineTo(13,WY+1);cx.lineTo(12,WY+5);cx.lineTo(26,WY+5);cx.closePath();cx.fill();
-  // shoe accent
-  cx.fillStyle='#e05510';cx.fillRect(-25,WY+1,5,4);cx.fillRect(21,WY+1,5,4);
-  // pedals
-  cx.fillStyle='#666';cx.fillRect(-26,WY-1,14,3);cx.fillRect(14,WY-1,14,3);
+  // muslo izquierdo
+  cx.beginPath();cx.moveTo(-10,-8);cx.lineTo(-20,6);cx.lineTo(-16,10);cx.lineTo(-6,-4);cx.closePath();cx.fill();
+  // espinilla izquierda
+  cx.beginPath();cx.moveTo(-20,6);cx.lineTo(-19,WCY+WRY-4);cx.lineTo(-15,WCY+WRY-4);cx.lineTo(-16,6);cx.closePath();cx.fill();
+  // muslo derecho
+  cx.beginPath();cx.moveTo(10,-8);cx.lineTo(20,6);cx.lineTo(16,10);cx.lineTo(6,-4);cx.closePath();cx.fill();
+  // espinilla derecha
+  cx.beginPath();cx.moveTo(20,6);cx.lineTo(19,WCY+WRY-4);cx.lineTo(15,WCY+WRY-4);cx.lineTo(16,6);cx.closePath();cx.fill();
+  // zapatillas
+  cx.fillStyle='#111';
+  cx.beginPath();cx.moveTo(-22,WCY+WRY-5);cx.lineTo(-12,WCY+WRY-5);cx.lineTo(-11,WCY+WRY);cx.lineTo(-23,WCY+WRY);cx.closePath();cx.fill();
+  cx.beginPath();cx.moveTo(22,WCY+WRY-5);cx.lineTo(12,WCY+WRY-5);cx.lineTo(11,WCY+WRY);cx.lineTo(23,WCY+WRY);cx.closePath();cx.fill();
+  cx.fillStyle='#e05510';cx.fillRect(-22,WCY+WRY-5,4,4);cx.fillRect(19,WCY+WRY-5,4,4);
+  // pedales
+  cx.fillStyle='#555';cx.fillRect(-24,WCY+WRY-7,12,3);cx.fillRect(13,WCY+WRY-7,12,3);
 
-  // ── BODY — back of rider (bent forward = body leans toward horizon)
-  // shorts / hips
+  // ══ CUERPO ══
+  // shorts
   cx.fillStyle='#16163a';
-  cx.beginPath();cx.moveTo(-13,-8);cx.lineTo(13,-8);cx.lineTo(11,2);cx.lineTo(-11,2);cx.closePath();cx.fill();
-  // jersey BACK — wider at shoulders, tapers to hips
+  cx.beginPath();cx.moveTo(-12,-6);cx.lineTo(12,-6);cx.lineTo(10,4);cx.lineTo(-10,4);cx.closePath();cx.fill();
+  // jersey espalda
   cx.fillStyle='#e05510';
-  cx.beginPath();
-  cx.moveTo(-13,-8);  // hip left
-  cx.lineTo(-14,-28); // shoulder left
-  cx.lineTo(14,-28);  // shoulder right
-  cx.lineTo(13,-8);   // hip right
-  cx.closePath();cx.fill();
-  // jersey side stripes (darker)
+  cx.beginPath();cx.moveTo(-13,-6);cx.lineTo(13,-6);cx.lineTo(12,-26);cx.lineTo(-12,-26);cx.closePath();cx.fill();
   cx.fillStyle='#c83a00';
-  cx.beginPath();cx.moveTo(-14,-28);cx.lineTo(-13,-8);cx.lineTo(-8,-8);cx.lineTo(-9,-28);cx.closePath();cx.fill();
-  cx.beginPath();cx.moveTo(14,-28);cx.lineTo(13,-8);cx.lineTo(8,-8);cx.lineTo(9,-28);cx.closePath();cx.fill();
-  // spine seam
-  cx.strokeStyle='#c83a00';cx.lineWidth=1.5;
-  cx.beginPath();cx.moveTo(0,-8);cx.lineTo(0,-28);cx.stroke();
-  // number plate
-  cx.fillStyle='rgba(255,255,255,.9)';cx.fillRect(-5,-21,10,9);
-  cx.fillStyle='#e05510';cx.font='bold 6px monospace';cx.textAlign='center';cx.fillText('1',0,-14);
+  cx.beginPath();cx.moveTo(-13,-6);cx.lineTo(-12,-26);cx.lineTo(-7,-26);cx.lineTo(-8,-6);cx.closePath();cx.fill();
+  cx.beginPath();cx.moveTo(13,-6);cx.lineTo(12,-26);cx.lineTo(7,-26);cx.lineTo(8,-6);cx.closePath();cx.fill();
+  cx.fillStyle='rgba(255,255,255,.9)';cx.fillRect(-5,-20,10,9);
+  cx.fillStyle='#e05510';cx.font='bold 6px monospace';cx.textAlign='center';cx.fillText('1',0,-12);
 
-  // ── ARMS — backs of arms going forward-down to bars
+  // ══ BRAZOS ══
   cx.strokeStyle='#e05510';cx.lineWidth=7;cx.lineCap='round';
-  cx.beginPath();cx.moveTo(-13,-27);cx.quadraticCurveTo(-18,-22,-22,-15);cx.stroke();
+  cx.beginPath();cx.moveTo(-12,-25);cx.quadraticCurveTo(-17,-20,-22,-14);cx.stroke();
   cx.strokeStyle='#c83a00';cx.lineWidth=4;
-  cx.beginPath();cx.moveTo(-13,-27);cx.quadraticCurveTo(-18,-22,-22,-15);cx.stroke();
+  cx.beginPath();cx.moveTo(-12,-25);cx.quadraticCurveTo(-17,-20,-22,-14);cx.stroke();
   cx.strokeStyle='#e05510';cx.lineWidth=7;
-  cx.beginPath();cx.moveTo(13,-27);cx.quadraticCurveTo(18,-22,22,-15);cx.stroke();
+  cx.beginPath();cx.moveTo(12,-25);cx.quadraticCurveTo(17,-20,22,-14);cx.stroke();
   cx.strokeStyle='#c83a00';cx.lineWidth=4;
-  cx.beginPath();cx.moveTo(13,-27);cx.quadraticCurveTo(18,-22,22,-15);cx.stroke();
-  // gloves
+  cx.beginPath();cx.moveTo(12,-25);cx.quadraticCurveTo(17,-20,22,-14);cx.stroke();
+  // guantes
   cx.fillStyle='#222';
-  cx.beginPath();cx.arc(-22,-15,4,0,Math.PI*2);cx.fill();
-  cx.beginPath();cx.arc(22,-15,4,0,Math.PI*2);cx.fill();
-  // handlebar (tilts with steering)
-  cx.strokeStyle='#777';cx.lineWidth=5;
-  cx.beginPath();cx.moveTo(-24,-14+steer*10);cx.lineTo(24,-14-steer*10);cx.stroke();
-  cx.strokeStyle='#aaa';cx.lineWidth=2.5;
-  cx.beginPath();cx.moveTo(-24,-14+steer*10);cx.lineTo(24,-14-steer*10);cx.stroke();
+  cx.beginPath();cx.arc(-22,-14,4,0,Math.PI*2);cx.fill();
+  cx.beginPath();cx.arc(22,-14,4,0,Math.PI*2);cx.fill();
+  // manubrio
+  cx.strokeStyle='#666';cx.lineWidth=5;
+  cx.beginPath();cx.moveTo(-24,-13+steer*10);cx.lineTo(24,-13-steer*10);cx.stroke();
+  cx.strokeStyle='#aaa';cx.lineWidth=2;
+  cx.beginPath();cx.moveTo(-24,-13+steer*10);cx.lineTo(24,-13-steer*10);cx.stroke();
   cx.fillStyle='#333';
-  cx.beginPath();cx.arc(-24,-14+steer*10,4,0,Math.PI*2);cx.fill();
-  cx.beginPath();cx.arc(24,-14-steer*10,4,0,Math.PI*2);cx.fill();
+  cx.beginPath();cx.arc(-24,-13+steer*10,4,0,Math.PI*2);cx.fill();
+  cx.beginPath();cx.arc(24,-13-steer*10,4,0,Math.PI*2);cx.fill();
 
-  // ── HELMET — full-face motocross integral (from behind)
-  var HY2=-42; // helmet center y
-  // main shell — elongated oval (wider than tall, big MX shape)
-  cx.fillStyle='#eeeeee';
-  cx.beginPath();cx.ellipse(0,HY2,14,12,0,0,Math.PI*2);cx.fill();
-  // upper shell orange
+  // ══ CASCO INTEGRAL MX ══
+  var HC=-40; // centro casco
+  // shell completo — oval grande
+  cx.fillStyle='#e8e8e8';
+  cx.beginPath();cx.ellipse(0,HC,13,14,0,0,Math.PI*2);cx.fill();
+  // mitad superior naranja
   cx.fillStyle='#e05510';
-  cx.beginPath();cx.ellipse(0,HY2,14,12,0,Math.PI,Math.PI*2);cx.fill();
-  // green racing stripe
-  cx.fillStyle='#9ae62a';cx.fillRect(-14,HY2-1,28,4);
-  // REAR SCOOP / air duct (characteristic MX feature)
+  cx.beginPath();cx.ellipse(0,HC,13,14,0,Math.PI,Math.PI*2);cx.fill();
+  // franja verde
+  cx.fillStyle='#9ae62a';cx.fillRect(-13,HC,26,4);
+  // VISERA GRANDE (pico arriba — clásico MX)
+  cx.fillStyle='#1a1a1a';
+  cx.beginPath();cx.moveTo(-14,HC-11);cx.lineTo(-17,HC-18);cx.lineTo(17,HC-18);cx.lineTo(14,HC-11);cx.closePath();cx.fill();
+  cx.fillStyle='#2a2a2a';
+  cx.beginPath();cx.moveTo(-13,HC-11);cx.lineTo(-16,HC-17);cx.lineTo(16,HC-17);cx.lineTo(13,HC-11);cx.closePath();cx.fill();
+  // scoop trasero
+  cx.fillStyle='#c83a00';
+  cx.beginPath();cx.moveTo(-7,HC-12);cx.lineTo(-5,HC-18);cx.lineTo(5,HC-18);cx.lineTo(7,HC-12);cx.closePath();cx.fill();
+  // chin guard (borde inferior del full-face)
   cx.fillStyle='#ddd';
-  cx.beginPath();cx.moveTo(-8,HY2-10);cx.lineTo(-6,HY2-16);cx.lineTo(6,HY2-16);cx.lineTo(8,HY2-10);cx.closePath();cx.fill();
-  cx.fillStyle='#e05510';
-  cx.beginPath();cx.moveTo(-8,HY2-10);cx.lineTo(-6,HY2-16);cx.lineTo(6,HY2-16);cx.lineTo(8,HY2-10);cx.closePath();cx.fill();
-  // visor/peak on top (large MX peak, from behind looks like a shelf)
-  cx.fillStyle='#222';
-  cx.beginPath();cx.moveTo(-15,HY2-9);cx.lineTo(-18,HY2-14);cx.lineTo(18,HY2-14);cx.lineTo(15,HY2-9);cx.closePath();cx.fill();
-  cx.fillStyle='#333';
-  cx.beginPath();cx.moveTo(-15,HY2-9);cx.lineTo(-18,HY2-14);cx.lineTo(18,HY2-14);cx.lineTo(15,HY2-9);cx.closePath();cx.fill();
-  // chin guard (from behind: lower portion of helmet wrapping under)
-  cx.fillStyle='#ddd';
-  cx.beginPath();cx.moveTo(-10,HY2+8);cx.lineTo(-12,HY2+14);cx.lineTo(12,HY2+14);cx.lineTo(10,HY2+8);cx.closePath();cx.fill();
+  cx.beginPath();cx.moveTo(-9,HC+11);cx.lineTo(-11,HC+17);cx.lineTo(11,HC+17);cx.lineTo(9,HC+11);cx.closePath();cx.fill();
   cx.fillStyle='#bbb';
-  cx.beginPath();cx.moveTo(-10,HY2+8);cx.lineTo(-12,HY2+14);cx.lineTo(12,HY2+14);cx.lineTo(10,HY2+8);cx.closePath();cx.fill();
+  cx.beginPath();cx.moveTo(-9,HC+11);cx.lineTo(-11,HC+17);cx.lineTo(11,HC+17);cx.lineTo(9,HC+11);cx.closePath();cx.fill();
   // neck roll
-  cx.fillStyle='#1a1a2e';
-  cx.beginPath();cx.moveTo(-10,HY2+12);cx.lineTo(-8,HY2+18);cx.lineTo(8,HY2+18);cx.lineTo(10,HY2+12);cx.closePath();cx.fill();
-  // helmet vents on top
-  cx.fillStyle='rgba(0,0,0,.5)';
-  cx.fillRect(-6,HY2-15,3,4);cx.fillRect(-1,HY2-16,4,5);cx.fillRect(5,HY2-15,3,4);
-  // reflective strip
-  cx.strokeStyle='rgba(255,255,255,.3)';cx.lineWidth=1.5;
-  cx.beginPath();cx.arc(0,HY2,13,Math.PI*.2,Math.PI*.8);cx.stroke();
+  cx.fillStyle='#111';
+  cx.beginPath();cx.moveTo(-9,HC+15);cx.lineTo(-7,HC+20);cx.lineTo(7,HC+20);cx.lineTo(9,HC+15);cx.closePath();cx.fill();
+  // vents
+  cx.fillStyle='rgba(0,0,0,.55)';
+  cx.fillRect(-6,HC-17,3,4);cx.fillRect(-1,HC-18,4,5);cx.fillRect(4,HC-17,3,4);
+  // reflejo
+  cx.strokeStyle='rgba(255,255,255,.25)';cx.lineWidth=1.5;
+  cx.beginPath();cx.arc(0,HC,12,Math.PI*.2,Math.PI*.8);cx.stroke();
 
   cx.restore();
 }
@@ -445,26 +442,26 @@ function drawRider(){
 
 // ─── HUD ───────────────────────────────────────────────────────────
 function hud(){
-  cx.fillStyle='rgba(0,0,0,.55)';pill(8,8,110,28,6);cx.fill();
+  cx.fillStyle='rgba(0,0,0,.55)';pill(8,8,120,28,6);cx.fill();
   cx.fillStyle='#9ae62a';cx.font='bold 10px Courier New,monospace';cx.textAlign='left';cx.fillText('KM',16,26);
   cx.fillStyle='#fff';cx.font='bold 13px Courier New,monospace';cx.fillText(('     '+score).slice(-5),38,26);
   for(var i=0;i<3;i++){
-    var bx2=W-18-i*22;cx.fillStyle=i<lives?'#e05510':'#2a2a2a';
+    var bx2=W-20-i*24;cx.fillStyle=i<lives?'#e05510':'#2a2a2a';
     cx.beginPath();cx.arc(bx2,20,8,0,Math.PI*2);cx.fill();
     if(i<lives){cx.fillStyle='rgba(255,255,255,.3)';cx.beginPath();cx.arc(bx2-2,16,3,0,Math.PI*2);cx.fill();}
   }
   var spd=(speed-1.6)/3.2;
-  cx.fillStyle='rgba(0,0,0,.45)';pill(8,H-22,76,14,4);cx.fill();
-  cx.fillStyle='hsl('+(120-spd*120)+',80%,50%)';pill(8,H-22,Math.max(4,76*spd),14,4);cx.fill();
+  cx.fillStyle='rgba(0,0,0,.45)';pill(8,H-22,120,14,4);cx.fill();
+  cx.fillStyle='hsl('+(120-spd*120)+',80%,50%)';pill(8,H-22,Math.max(4,120*spd),14,4);cx.fill();
   cx.fillStyle='rgba(255,255,255,.7)';cx.font='7px monospace';cx.textAlign='left';cx.fillText('VELOCIDAD',12,H-12);
-  if(best>0){cx.fillStyle='rgba(0,0,0,.4)';pill(8,42,110,18,4);cx.fill();
+  if(best>0){cx.fillStyle='rgba(0,0,0,.4)';pill(8,42,140,18,4);cx.fill();
     cx.fillStyle='#aaa';cx.font='8px monospace';cx.fillText('RECORD: '+best+' KM',14,54);}
 }
 function menu(){
   cx.fillStyle='rgba(0,0,0,.75)';cx.fillRect(0,0,W,H);
   cx.fillStyle='#e05510';cx.font='bold 38px Impact,Arial Black,sans-serif';cx.textAlign='center';
-  cx.fillText('TRAIL',W/2,H/2-30);cx.fillText('RIPPER',W/2,H/2+14);
-  cx.fillStyle='rgba(224,85,16,.25)';cx.fillRect(W/2-100,H/2-38,200,66);
+  cx.fillText('TRAIL',W/2,H/2-28);cx.fillText('RIPPER',W/2,H/2+16);
+  cx.fillStyle='rgba(224,85,16,.25)';cx.fillRect(W/2-130,H/2-38,260,66);
   cx.fillStyle='#ccc';cx.font='9px monospace';cx.fillText('← →  MOVER     ↑ / SPACE  SALTAR',W/2,H/2+44);
   if(fn%44<28){cx.fillStyle='#9ae62a';cx.font='bold 11px monospace';cx.fillText('[ TOCA PARA INICIAR ]',W/2,H/2+72);}
 }
