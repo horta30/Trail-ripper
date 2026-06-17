@@ -3,21 +3,36 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
-<title>TRAIL RIPPER — Stage Crono</title>
+<title>CERRO ABAJO — Stage Crono Arcade</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-html,body{width:100%;height:100%;overflow:hidden;background:#0d0d0d}
+html,body{width:100%;height:100%;overflow:hidden;background:#0a0a12}
 body{display:flex;justify-content:center;align-items:center}
-canvas{position:absolute;width:800px;height:450px;transform-origin:center center;box-shadow:0 0 60px rgba(180,230,0,.2);cursor:crosshair;touch-action:none}
+canvas{
+  position:absolute;width:800px;height:450px;transform-origin:center center;
+  box-shadow:0 0 60px rgba(255,150,40,.25);cursor:crosshair;touch-action:none;
+  image-rendering:pixelated;image-rendering:-moz-crisp-edges;image-rendering:crisp-edges;
+}
 </style>
 </head>
 <body>
 <canvas id="c" width="800" height="450"></canvas>
 <script>
-var cv=document.getElementById('c'),cx=cv.getContext('2d');
+var cv=document.getElementById('c'),mctx=cv.getContext('2d');
+mctx.imageSmoothingEnabled=false;
+
+// ─── PIXEL ART RENDER PIPELINE ──────────────────────────────────────
+// Dibujamos toda la lógica en coordenadas "lógicas" 800x450 (igual que antes),
+// pero el contexto real (cx) es un canvas chico — el navegador rasteriza en
+// baja resolución y luego escalamos sin suavizado: pixel art genuino.
+var PIXEL_SCALE=0.5;               // 0.5 = downscale x2 (400x225 internos)
+var OW=Math.round(800*PIXEL_SCALE), OH=Math.round(450*PIXEL_SCALE);
+var oc=document.createElement('canvas'); oc.width=OW; oc.height=OH;
+var cx=oc.getContext('2d'); cx.imageSmoothingEnabled=false;
+
 var W=800,H=450,HY=H*.34,RY=H*.68,VPX=W/2;
 
-// ─── AUDIO ──────────────────────────────────────────────────────────
+// ─── AUDIO — SFX ─────────────────────────────────────────────────────
 var AC=null;
 function initAC(){if(!AC)AC=new(window.AudioContext||window.webkitAudioContext)();}
 function tone(freq,dur,vol,type,sweep){
@@ -47,6 +62,36 @@ function sndKicker(){tone(200,0.05,.1,'sine',900);setTimeout(function(){tone(500
 function sndCrash(){noise(.35,.5);tone(180,.4,.12,'sawtooth',60);}
 function sndScore(){tone(880,.08,.07,'sine',1100);}
 
+// ─── AUDIO — CHIPTUNE LOOP (8-bit BMX arcade) ──────────────────────
+var musicOn=false, musicStep=0, musicNextTime=0;
+var BPM=148, STEP=60/BPM/2;
+// Bassline (Hz) — patrón punchy estilo NES, 16 pasos (2 compases octavos)
+var bass=[110,0,110,98, 0,98,87,0, 87,0,87,98, 0,98,110,0];
+// Lead arpeggio
+var lead=[0,440,0,554, 659,0,554,0, 0,440,0,392, 440,0,494,0];
+function toneAt(t,freq,dur,vol,type){
+  if(!AC||!freq)return;
+  var o=AC.createOscillator(),g=AC.createGain();
+  o.connect(g);g.connect(AC.destination);
+  o.type=type||'square';
+  o.frequency.setValueAtTime(freq,t);
+  g.gain.setValueAtTime(0,t);
+  g.gain.linearRampToValueAtTime(vol,t+.008);
+  g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  o.start(t);o.stop(t+dur+.02);
+}
+function scheduleMusicStep(){
+  if(!musicOn||!AC)return;
+  var t=musicNextTime;
+  toneAt(t,bass[musicStep%bass.length],STEP*.92,.045,'square');
+  toneAt(t,lead[musicStep%lead.length],STEP*.8,.03,'triangle');
+  musicStep++;musicNextTime+=STEP;
+  var delay=(musicNextTime-AC.currentTime-.05)*1000;
+  setTimeout(scheduleMusicStep,Math.max(0,delay));
+}
+function startMusic(){if(!AC||musicOn)return;musicOn=true;musicStep=0;musicNextTime=AC.currentTime+.05;scheduleMusicStep();}
+function stopMusic(){musicOn=false;}
+
 // ─── PERSPECTIVE ───────────────────────────────────────────────────
 function tL(z){return VPX-(60+(480-60)*z)/2;}
 function tR(z){return VPX+(60+(480-60)*z)/2;}
@@ -60,8 +105,8 @@ var rNX=0,rVX=0,rJ=0,rJV=0,rGnd=true,inv=0,crash=false,cT=0;
 var obs=[],spc=0,tsc=0;
 var lastScore=0;
 var keys={},tDir=0,tJump=false;
-var mtns=[];
-for(var xi=0;xi<=W;xi+=18)mtns.push(H*.18+Math.sin(xi*.006)*35+Math.sin(xi*.018)*18);
+var hills=[];
+for(var xi=0;xi<=W;xi+=18)hills.push(H*.18+Math.sin(xi*.006)*35+Math.sin(xi*.018)*18);
 
 // ─── CONTROLS ──────────────────────────────────────────────────────
 document.addEventListener('keydown',function(e){
@@ -70,16 +115,26 @@ document.addEventListener('keydown',function(e){
   if(phase!=='playing'){initAC();go();}
 });
 document.addEventListener('keyup',function(e){keys[e.code]=false;});
+function getTouchX(e){
+  var r=cv.getBoundingClientRect();
+  var tx=e.touches[0].clientX, ty=e.touches[0].clientY;
+  if(cv._portrait){
+    var relY=(ty-r.top)/r.height;
+    return (1-relY)*W;
+  } else {
+    return (tx-r.left)/r.width*W;
+  }
+}
 cv.addEventListener('touchstart',function(e){
   e.preventDefault();
   initAC();
   if(phase!=='playing'){go();return;}
-  var r=cv.getBoundingClientRect(),x=(e.touches[0].clientX-r.left)/r.width*W;
+  var x=getTouchX(e);
   if(x<W*.3)tDir=-1;else if(x>W*.7)tDir=1;else tJump=true;
 },{passive:false});
 cv.addEventListener('touchmove',function(e){
   e.preventDefault();
-  var r=cv.getBoundingClientRect(),x=(e.touches[0].clientX-r.left)/r.width*W;
+  var x=getTouchX(e);
   tDir=x<W*.3?-1:x>W*.7?1:0;
 },{passive:false});
 cv.addEventListener('touchend',function(){tDir=0;});
@@ -89,6 +144,7 @@ function go(){
   phase='playing';score=0;dist=0;speed=1.6;lives=3;fn=0;
   rNX=0;rVX=0;rJ=0;rJV=0;rGnd=true;inv=0;crash=false;cT=0;
   obs=[];spc=0;tsc=0;lastScore=0;
+  startMusic();
 }
 function jump(p){
   if(!rGnd)return;
@@ -118,7 +174,7 @@ function update(){
 
   spc--;
   if(spc<=0){
-    var r=Math.random(),t=r<.35?'rock':r<.6?'log':r<.8?'tree':'kick';
+    var r=Math.random(),t=r<.35?'stone':r<.6?'curb':r<.8?'pole':'ramp';
     var nx=Math.max(-.75,Math.min(.75,(Math.random()-.5)*1.4));
     obs.push({t:t,nx:nx,z:0,hit:false,used:false});
     spc=Math.max(22,58-dist*.015)+(Math.random()*28|0);
@@ -127,14 +183,14 @@ function update(){
   var dz=speed*.011;
   for(var i=obs.length-1;i>=0;i--){
     var o=obs[i];o.z+=dz;
-    if(o.t==='kick'&&!o.used&&o.z>.90&&o.z<1.06&&Math.abs(rNX-o.nx)<.22&&rGnd){o.used=true;jump(18);}
-    if(!o.hit&&o.t!=='kick'&&inv<=0&&o.z>.87&&o.z<1.06){
-      var dx=Math.abs(rNX-o.nx),hw=o.t==='tree'?.17:.14;
-      if(dx<hw&&!((o.t==='rock'||o.t==='log')&&rJ<-16)){
+    if(o.t==='ramp'&&!o.used&&o.z>.90&&o.z<1.06&&Math.abs(rNX-o.nx)<.22&&rGnd){o.used=true;jump(18);}
+    if(!o.hit&&o.t!=='ramp'&&inv<=0&&o.z>.87&&o.z<1.06){
+      var dx=Math.abs(rNX-o.nx),hw=o.t==='pole'?.17:.14;
+      if(dx<hw&&!((o.t==='stone'||o.t==='curb')&&rJ<-16)){
         o.hit=true;crash=true;cT=40;inv=110;rJV=-9;rGnd=false;
         sndCrash();
         lives--;
-        if(lives<=0)setTimeout(function(){if(score>best)best=score;phase='gameover';},800);
+        if(lives<=0)setTimeout(function(){if(score>best)best=score;phase='gameover';stopMusic();},800);
       }
     }
     if(o.z>1.25)obs.splice(i,1);
@@ -151,120 +207,188 @@ function pill(x,y,w,h,r){
   cx.lineTo(x,y+r);cx.arcTo(x,y,x+r,y,r);cx.closePath();
 }
 
-// ─── LOGO (canvas-rendered, no PNG) ────────────────────────────────
+// ─── LOGO ────────────────────────────────────────────────────────
 function drawLogo(){
   cx.save();cx.translate(W/2,26);
-
-  // Icon: hexagon frame + lightning
   cx.save();cx.translate(-68,8);cx.scale(.65,.65);
-  // Outer hex
   cx.strokeStyle='#9ae62a';cx.lineWidth=5;
   cx.beginPath();
   var pts=[[-20,-34],[20,-34],[38,0],[20,34],[-20,34],[-38,0]];
   cx.moveTo(pts[0][0],pts[0][1]);
   for(var p=1;p<pts.length;p++)cx.lineTo(pts[p][0],pts[p][1]);
   cx.closePath();cx.stroke();
-  // Inner C-shape (left arc)
-  cx.strokeStyle='#9ae62a';cx.lineWidth=5;
   cx.beginPath();cx.arc(0,0,20,Math.PI*.6,Math.PI*1.4);cx.stroke();
-  // Lightning bolt
   cx.fillStyle='#9ae62a';
   cx.beginPath();cx.moveTo(4,-26);cx.lineTo(-8,2);cx.lineTo(2,2);cx.lineTo(-4,26);cx.lineTo(14,-2);cx.lineTo(4,-2);cx.closePath();cx.fill();
   cx.restore();
-
-  // "STAGE" text
   cx.fillStyle='#ffffff';cx.font='bold 20px Impact,Arial Black,sans-serif';
   cx.textAlign='left';cx.fillText('STAGE',-30,-5);
   cx.fillStyle='#9ae62a';cx.font='bold 24px Impact,Arial Black,sans-serif';
   cx.fillText('CRONO',-30,19);
-  cx.fillStyle='rgba(255,255,255,.45)';cx.font='7px Arial,sans-serif';
-  cx.textAlign='center';cx.fillText('THE MOUNTAIN IS RACING',28,32);
-
+  cx.fillStyle='rgba(255,255,255,.5)';cx.font='7px Arial,sans-serif';
+  cx.textAlign='center';cx.fillText('CERRO ABAJO ARCADE',28,32);
   cx.restore();
 }
 
-// ─── SCENE ─────────────────────────────────────────────────────────
+// ─── ESCENA: VALPARAÍSO CERRO ABAJO ────────────────────────────────
 function sky(){
+  // Atardecer porteño — degradé cálido
   var g=cx.createLinearGradient(0,0,0,HY+30);
-  g.addColorStop(0,'#0c0b1a');g.addColorStop(.55,'#1e3655');g.addColorStop(1,'#3a6878');
+  g.addColorStop(0,'#2a1a3a');
+  g.addColorStop(.30,'#5a2d52');
+  g.addColorStop(.55,'#c9543f');
+  g.addColorStop(.78,'#e8954a');
+  g.addColorStop(1,'#2a4a5a');
   cx.fillStyle=g;cx.fillRect(0,0,W,HY+30);
+
+  // Sol bajo
+  cx.fillStyle='rgba(255,224,150,.9)';
+  cx.beginPath();cx.arc(W*.74,HY*.52,26,0,Math.PI*2);cx.fill();
+
+  // Franja de mar (el Pacífico, visible desde el cerro)
+  cx.fillStyle='#1f4a5c';
+  cx.fillRect(0,HY-6,W,10);
+  cx.strokeStyle='rgba(255,220,180,.35)';cx.lineWidth=1;
+  for(var wv=0;wv<W;wv+=26){
+    cx.beginPath();cx.moveTo(wv,HY-2);cx.lineTo(wv+14,HY-2);cx.stroke();
+  }
   drawLogo();
 }
+
 function mountains(){
+  // Silueta de cerros porteños (densidad urbana, tono cálido oscuro)
   cx.beginPath();cx.moveTo(0,HY+12);
-  for(var i=0;i<mtns.length;i++)cx.lineTo(i*18,mtns[i]);
-  cx.lineTo(W,HY+12);cx.closePath();cx.fillStyle='#132a1c';cx.fill();
+  for(var i=0;i<hills.length;i++)cx.lineTo(i*18,hills[i]);
+  cx.lineTo(W,HY+12);cx.closePath();cx.fillStyle='#3a2440';cx.fill();
   cx.beginPath();cx.moveTo(0,HY+12);
-  for(var i=0;i<mtns.length;i++)cx.lineTo(i*18,mtns[i]+20+Math.sin(i*.4)*8);
-  cx.lineTo(W,HY+12);cx.closePath();cx.fillStyle='#0e1f14';cx.fill();
+  for(var i=0;i<hills.length;i++)cx.lineTo(i*18,hills[i]+20+Math.sin(i*.4)*8);
+  cx.lineTo(W,HY+12);cx.closePath();cx.fillStyle='#2a1830';cx.fill();
+  // lucecitas de casas distantes (pixel dots)
+  for(var k=0;k<40;k++){
+    var hx=(k*97+tsc*3)%W, hi=Math.floor(hx/18)%hills.length;
+    var hyv=hills[hi]+14+((k*53)%18);
+    cx.fillStyle=k%5===0?'rgba(255,210,120,.8)':'rgba(255,180,100,.5)';
+    cx.fillRect(hx,hyv,2,2);
+  }
 }
+
 function trail(){
-  cx.fillStyle='#1c3a1c';cx.fillRect(0,HY,W,H-HY);
+  // Calle de adoquines en bajada
+  cx.fillStyle='#241a2e';cx.fillRect(0,HY,W,H-HY);
   cx.beginPath();cx.moveTo(tL(0),HY);cx.lineTo(tR(0),HY);cx.lineTo(tR(1),H);cx.lineTo(tL(1),H);cx.closePath();
   var tg=cx.createLinearGradient(0,HY,0,H);
-  tg.addColorStop(0,'#3a2510');tg.addColorStop(.45,'#56361c');tg.addColorStop(1,'#6b4228');
+  tg.addColorStop(0,'#5b5b68');tg.addColorStop(.5,'#6e6a72');tg.addColorStop(1,'#84777a');
   cx.fillStyle=tg;cx.fill();
-  for(var i=0;i<9;i++){
-    var z0=(i+tsc/52)/9,z1=(i+1+tsc/52)/9;
-    if(z0>1||z1<0||i%2===0)continue;
+
+  // Filas de adoquines (perspectiva)
+  for(var i=0;i<14;i++){
+    var z0=(i+tsc/52)/14,z1=(i+1+tsc/52)/14;
+    if(z0>1||z1<0)continue;
+    var zc=Math.min(1,(z0+z1)*.5);
     cx.beginPath();
-    cx.moveTo(wX(-.06,z0),wY(z0));cx.lineTo(wX(.06,z0),wY(z0));
-    cx.lineTo(wX(.06,Math.min(z1,1)),wY(Math.min(z1,1)));
-    cx.lineTo(wX(-.06,Math.min(z1,1)),wY(Math.min(z1,1)));
-    cx.closePath();cx.fillStyle='rgba(100,65,35,'+(.22+(z0+z1)*.14)+')';cx.fill();
+    cx.moveTo(wX(-1,z0),wY(z0));cx.lineTo(wX(1,z0),wY(z0));
+    cx.lineTo(wX(1,Math.min(z1,1)),wY(Math.min(z1,1)));
+    cx.lineTo(wX(-1,Math.min(z1,1)),wY(Math.min(z1,1)));
+    cx.closePath();
+    cx.strokeStyle='rgba(35,28,38,'+(.35+zc*.25)+')';
+    cx.lineWidth=Math.max(1,2.5*sc(zc));
+    cx.stroke();
   }
-  cx.strokeStyle='#7a5030';cx.lineWidth=1.5;
+  // Juntas verticales de adoquines (más sutil)
+  for(var c=-3;c<=3;c++){
+    if(c===0)continue;
+    cx.beginPath();cx.moveTo(wX(c*.16,0),wY(0));cx.lineTo(wX(c*.16,1),wY(1));
+    cx.strokeStyle='rgba(35,28,38,.18)';cx.lineWidth=1;cx.stroke();
+  }
+  // Línea central pintada (típica calle urbana)
+  for(var d=0;d<9;d++){
+    var dz0=(d+tsc/52)/9,dz1=(d+.5+tsc/52)/9;
+    if(dz0>1||dz1<0||d%2===0)continue;
+    cx.beginPath();
+    cx.moveTo(wX(-.04,dz0),wY(dz0));cx.lineTo(wX(.04,dz0),wY(dz0));
+    cx.lineTo(wX(.04,Math.min(dz1,1)),wY(Math.min(dz1,1)));
+    cx.lineTo(wX(-.04,Math.min(dz1,1)),wY(Math.min(dz1,1)));
+    cx.closePath();cx.fillStyle='rgba(255,210,90,.55)';cx.fill();
+  }
+  cx.strokeStyle='#3a2e30';cx.lineWidth=2;
   cx.beginPath();cx.moveTo(tL(0),HY);cx.lineTo(tL(1),H);cx.stroke();
   cx.beginPath();cx.moveTo(tR(0),HY);cx.lineTo(tR(1),H);cx.stroke();
 }
-function pine(x,y,s){
-  var h=85*s,w=30*s;
-  cx.fillStyle='#2e1508';cx.fillRect(x-4*s,y-h*.28,8*s,h*.32);
-  var cs=['#093209','#0d4a0d','#175a17'];
-  for(var L=0;L<3;L++){
-    cx.fillStyle=cs[L];cx.beginPath();
-    cx.moveTo(x,y-h*.15-L*h*.24-h*.26);
-    cx.lineTo(x+w*(1-L*.22)/2,y-h*.15-L*h*.24);
-    cx.lineTo(x-w*(1-L*.22)/2,y-h*.15-L*h*.24);
-    cx.closePath();cx.fill();
-  }
+
+// Casas de cerro porteño, coloridas, apiladas en la ladera
+var HOUSE_COLORS=[
+  ['#e8527a','#7a1f3a'],['#3fb6c4','#1a5a62'],['#f2c14e','#8a6a1a'],
+  ['#7ed957','#2f6b1f'],['#f27a3f','#8a3a14'],['#b07ed9','#4a2a6b'],
+  ['#f2efe4','#9a9682']
+];
+function house(x,y,s,seed){
+  var w=26*s,h=30*s,roofH=12*s;
+  var col=HOUSE_COLORS[seed%HOUSE_COLORS.length];
+  // sombra de base
+  cx.fillStyle='rgba(0,0,0,.25)';cx.fillRect(x-w/2,y-2*s,w,3*s);
+  // cuerpo
+  cx.fillStyle=col[0];cx.fillRect(x-w/2,y-h,w,h);
+  // sombra lateral (volumen)
+  cx.fillStyle='rgba(0,0,0,.18)';cx.fillRect(x+w/2-w*.28,y-h,w*.28,h);
+  // techo
+  cx.fillStyle=col[1];
+  cx.beginPath();
+  cx.moveTo(x-w/2-3*s,y-h);cx.lineTo(x+w/2+3*s,y-h);cx.lineTo(x+w/2+3*s,y-h-roofH*.35);
+  cx.lineTo(x,y-h-roofH);cx.lineTo(x-w/2-3*s,y-h-roofH*.35);cx.closePath();cx.fill();
+  // ventanas
+  cx.fillStyle='rgba(255,225,140,.85)';
+  cx.fillRect(x-w*.28,y-h*.62,w*.18,h*.2);
+  cx.fillRect(x+w*.10,y-h*.62,w*.18,h*.2);
+  // puerta
+  cx.fillStyle='rgba(40,25,20,.8)';
+  cx.fillRect(x-w*.10,y-h*.28,w*.2,h*.28);
 }
-function forest(){
+function houses(){
   for(var i=0;i<11;i++){
     var z=((i/11)+tsc/52*.45)%1,s=sc(z),sy=wY(z);
-    pine(tL(z)-16*s,sy,s);pine(tR(z)+16*s,sy,s);
+    house(tL(z)-18*s,sy,s,i);
+    house(tR(z)+18*s,sy,s,i+3);
   }
 }
+
 function obstacles(){
   var sorted=obs.slice().sort(function(a,b){return a.z-b.z;});
   for(var i=0;i<sorted.length;i++){
     var o=sorted[i];if(o.z<.04)continue;
     var s=sc(o.z),sx=wX(o.nx,o.z),sy=wY(o.z);
     cx.save();cx.translate(sx,sy);cx.scale(s,s);
-    if(o.t==='rock'){
-      cx.fillStyle=o.hit?'#ff5533':'#707070';
-      cx.beginPath();cx.moveTo(-20,2);cx.lineTo(-24,-6);cx.lineTo(-14,-17);
-      cx.lineTo(2,-20);cx.lineTo(18,-11);cx.lineTo(22,2);cx.closePath();cx.fill();
-    }else if(o.t==='log'){
-      cx.fillStyle=o.hit?'#ff6644':'#7a4518';cx.fillRect(-30,-12,60,10);
-      cx.fillStyle=o.hit?'#ff8855':'#9a5a20';cx.beginPath();cx.ellipse(0,-12,30,7,0,0,Math.PI*2);cx.fill();
-      cx.fillStyle=o.hit?'#cc3300':'#5a3010';
+    if(o.t==='stone'){
+      // adoquín suelto
+      cx.fillStyle=o.hit?'#ff5533':'#9098a0';
+      cx.beginPath();cx.moveTo(-18,2);cx.lineTo(-22,-7);cx.lineTo(-12,-16);
+      cx.lineTo(4,-18);cx.lineTo(18,-9);cx.lineTo(20,2);cx.closePath();cx.fill();
+      cx.strokeStyle=o.hit?'#ff8866':'#5a6068';cx.lineWidth=1.5;cx.stroke();
+    }else if(o.t==='curb'){
+      // muro bajo / escalón de cemento
+      cx.fillStyle=o.hit?'#ff6644':'#8a8680';cx.fillRect(-30,-12,60,10);
+      cx.fillStyle=o.hit?'#ff8855':'#a8a49c';cx.beginPath();cx.ellipse(0,-12,30,7,0,0,Math.PI*2);cx.fill();
+      cx.fillStyle=o.hit?'#cc3300':'#5c5852';
       cx.beginPath();cx.ellipse(-30,-7,6,9,0,0,Math.PI*2);cx.fill();
       cx.beginPath();cx.ellipse(30,-7,6,9,0,0,Math.PI*2);cx.fill();
-    }else if(o.t==='tree'){
-      cx.fillStyle=o.hit?'#ff3322':'#1a0a03';cx.fillRect(-6,-56,12,56);
-      var cs=o.hit?['#ff5544','#ff4433','#ff3322']:['#082008','#0c2e0c','#114411'];
-      for(var L=0;L<3;L++){
-        cx.fillStyle=cs[L];cx.beginPath();
-        cx.moveTo(0,-56-L*14);cx.lineTo(26-L*4,-36-L*8);cx.lineTo(-26+L*4,-36-L*8);
-        cx.closePath();cx.fill();
-      }
+    }else if(o.t==='pole'){
+      // poste de luz urbano
+      cx.fillStyle=o.hit?'#ff3322':'#1c1c1c';cx.fillRect(-4,-56,8,56);
+      cx.fillStyle=o.hit?'#ff5544':'#2a2a2a';
+      cx.beginPath();cx.moveTo(-4,-56);cx.lineTo(4,-56);cx.lineTo(10,-64);cx.lineTo(-10,-64);cx.closePath();cx.fill();
+      cx.fillStyle=o.hit?'rgba(255,120,80,.9)':'rgba(255,220,120,.9)';
+      cx.beginPath();cx.arc(0,-68,7,0,Math.PI*2);cx.fill();
+      cx.fillStyle='rgba(255,220,140,.25)';
+      cx.beginPath();cx.arc(0,-68,16,0,Math.PI*2);cx.fill();
     }else{
-      cx.fillStyle='#cc9922';
+      // rampa de cemento (salto)
+      cx.fillStyle='#9a948c';
       cx.beginPath();cx.moveTo(-28,2);cx.lineTo(28,2);cx.lineTo(28,-6);cx.lineTo(-28,-28);cx.closePath();cx.fill();
-      cx.fillStyle='#f0c040';
+      cx.fillStyle='#bdb6ac';
       cx.beginPath();cx.moveTo(-28,-28);cx.lineTo(28,-6);cx.lineTo(28,-4);cx.lineTo(-28,-26);cx.closePath();cx.fill();
-      cx.fillStyle='#9ae62a';cx.font='bold 8px monospace';cx.textAlign='center';cx.fillText('JUMP',0,-11);
+      // franja de seguridad amarilla/negra
+      cx.fillStyle='#222';cx.fillRect(-26,-22,52,4);
+      cx.fillStyle='#f2c14e';cx.fillRect(-26,-22,13,4);cx.fillRect(0,-22,13,4);
+      cx.fillStyle='#9ae62a';cx.font='bold 8px monospace';cx.textAlign='center';cx.fillText('SALTO',0,-11);
     }
     cx.restore();
   }
@@ -290,29 +414,19 @@ function drawRider(){
   }
 
   var steer=rVX*.18;
-
-  // ══ REAR WHEEL ══
-  // Perspectiva 3/4 trasera: elipse MÁS ALTA que ancha → rueda VERTICAL clara
-  // rx estrecho (profundidad), ry alto (altura real de la rueda)
   var WCY=22, WRX=13, WRY=20;
 
-  // Sombra de contacto con el suelo
   cx.fillStyle='rgba(0,0,0,.25)';
   cx.beginPath();cx.ellipse(0,WCY+WRY-1,WRX+2,4,0,0,Math.PI*2);cx.fill();
 
-  // Tire exterior
   cx.fillStyle='#0d0d0d';
   cx.beginPath();cx.ellipse(0,WCY,WRX,WRY,0,0,Math.PI*2);cx.fill();
-  // Tread lateral (knobby effect — franjas que subrayan la verticalidad)
   cx.strokeStyle='#1a1a1a';cx.lineWidth=2.5;
   cx.beginPath();cx.ellipse(0,WCY,WRX+1,WRY+1,0,0,Math.PI*2);cx.stroke();
-  // Rim band
   cx.strokeStyle='#333';cx.lineWidth=5;
   cx.beginPath();cx.ellipse(0,WCY,WRX-2,WRY-2,0,0,Math.PI*2);cx.stroke();
-  // Inner rim
   cx.strokeStyle='#555';cx.lineWidth=2;
   cx.beginPath();cx.ellipse(0,WCY,WRX-5,WRY-5,0,0,Math.PI*2);cx.stroke();
-  // 5 spokes en espacio de la elipse
   cx.strokeStyle='#666';cx.lineWidth=1.8;
   for(var a=0;a<Math.PI*2;a+=Math.PI*2/5){
     cx.beginPath();
@@ -320,53 +434,39 @@ function drawRider(){
     cx.lineTo(Math.cos(a)*(WRX-5),WCY+Math.sin(a)*(WRY-5));
     cx.stroke();
   }
-  // Hub
   cx.fillStyle='#999';cx.beginPath();cx.arc(0,WCY,5,0,Math.PI*2);cx.fill();
   cx.fillStyle='#444';cx.beginPath();cx.arc(0,WCY,2.5,0,Math.PI*2);cx.fill();
 
-  // ══ FRAME ══  (seat stays suben en V desde el hub — contexto clave)
   cx.strokeStyle='#b83808';cx.lineWidth=3.5;cx.lineCap='round';
-  cx.beginPath();cx.moveTo(-2,WCY-4);cx.lineTo(-10,-18);cx.stroke(); // left stay
-  cx.beginPath();cx.moveTo(2,WCY-4);cx.lineTo(10,-18);cx.stroke();  // right stay
+  cx.beginPath();cx.moveTo(-2,WCY-4);cx.lineTo(-10,-18);cx.stroke();
+  cx.beginPath();cx.moveTo(2,WCY-4);cx.lineTo(10,-18);cx.stroke();
   cx.strokeStyle='#ff5520';cx.lineWidth=3;
-  cx.beginPath();cx.moveTo(-10,-18);cx.lineTo(10,-18);cx.stroke();  // seat rail
+  cx.beginPath();cx.moveTo(-10,-18);cx.lineTo(10,-18);cx.stroke();
   cx.strokeStyle='#b83808';cx.lineWidth=2.5;
-  cx.beginPath();cx.moveTo(0,-18);cx.lineTo(0,-6);cx.stroke();      // seat tube
+  cx.beginPath();cx.moveTo(0,-18);cx.lineTo(0,-6);cx.stroke();
 
-  // ══ RUEDA DELANTERA ══ (elipse también, vista desde atrás)
   var fX=WRX*.5, fY=Math.max(6,WRY*.5-Math.abs(steer)*8);
   cx.fillStyle='#0d0d0d';
   cx.beginPath();cx.ellipse(0,-28,fX,fY,steer,0,Math.PI*2);cx.fill();
   cx.strokeStyle='#333';cx.lineWidth=3;
   cx.beginPath();cx.ellipse(0,-28,fX,fY,steer,0,Math.PI*2);cx.stroke();
-  // Fork tubes
   cx.strokeStyle='#999';cx.lineWidth=2;
   cx.beginPath();cx.moveTo(-4,-6);cx.quadraticCurveTo(-6,-16,-4,-28);cx.stroke();
   cx.beginPath();cx.moveTo(4,-6);cx.quadraticCurveTo(6,-16,4,-28);cx.stroke();
 
-  // ══ PIERNAS ══ (a los costados de la elipse, no del círculo)
   cx.fillStyle='#16163a';
-  // muslo izquierdo
   cx.beginPath();cx.moveTo(-10,-8);cx.lineTo(-20,6);cx.lineTo(-16,10);cx.lineTo(-6,-4);cx.closePath();cx.fill();
-  // espinilla izquierda
   cx.beginPath();cx.moveTo(-20,6);cx.lineTo(-19,WCY+WRY-4);cx.lineTo(-15,WCY+WRY-4);cx.lineTo(-16,6);cx.closePath();cx.fill();
-  // muslo derecho
   cx.beginPath();cx.moveTo(10,-8);cx.lineTo(20,6);cx.lineTo(16,10);cx.lineTo(6,-4);cx.closePath();cx.fill();
-  // espinilla derecha
   cx.beginPath();cx.moveTo(20,6);cx.lineTo(19,WCY+WRY-4);cx.lineTo(15,WCY+WRY-4);cx.lineTo(16,6);cx.closePath();cx.fill();
-  // zapatillas
   cx.fillStyle='#111';
   cx.beginPath();cx.moveTo(-22,WCY+WRY-5);cx.lineTo(-12,WCY+WRY-5);cx.lineTo(-11,WCY+WRY);cx.lineTo(-23,WCY+WRY);cx.closePath();cx.fill();
   cx.beginPath();cx.moveTo(22,WCY+WRY-5);cx.lineTo(12,WCY+WRY-5);cx.lineTo(11,WCY+WRY);cx.lineTo(23,WCY+WRY);cx.closePath();cx.fill();
   cx.fillStyle='#e05510';cx.fillRect(-22,WCY+WRY-5,4,4);cx.fillRect(19,WCY+WRY-5,4,4);
-  // pedales
   cx.fillStyle='#555';cx.fillRect(-24,WCY+WRY-7,12,3);cx.fillRect(13,WCY+WRY-7,12,3);
 
-  // ══ CUERPO ══
-  // shorts
   cx.fillStyle='#16163a';
   cx.beginPath();cx.moveTo(-12,-6);cx.lineTo(12,-6);cx.lineTo(10,4);cx.lineTo(-10,4);cx.closePath();cx.fill();
-  // jersey espalda
   cx.fillStyle='#e05510';
   cx.beginPath();cx.moveTo(-13,-6);cx.lineTo(13,-6);cx.lineTo(12,-26);cx.lineTo(-12,-26);cx.closePath();cx.fill();
   cx.fillStyle='#c83a00';
@@ -375,7 +475,6 @@ function drawRider(){
   cx.fillStyle='rgba(255,255,255,.9)';cx.fillRect(-5,-20,10,9);
   cx.fillStyle='#e05510';cx.font='bold 6px monospace';cx.textAlign='center';cx.fillText('1',0,-12);
 
-  // ══ BRAZOS ══
   cx.strokeStyle='#e05510';cx.lineWidth=7;cx.lineCap='round';
   cx.beginPath();cx.moveTo(-12,-25);cx.quadraticCurveTo(-17,-20,-22,-14);cx.stroke();
   cx.strokeStyle='#c83a00';cx.lineWidth=4;
@@ -384,11 +483,9 @@ function drawRider(){
   cx.beginPath();cx.moveTo(12,-25);cx.quadraticCurveTo(17,-20,22,-14);cx.stroke();
   cx.strokeStyle='#c83a00';cx.lineWidth=4;
   cx.beginPath();cx.moveTo(12,-25);cx.quadraticCurveTo(17,-20,22,-14);cx.stroke();
-  // guantes
   cx.fillStyle='#222';
   cx.beginPath();cx.arc(-22,-14,4,0,Math.PI*2);cx.fill();
   cx.beginPath();cx.arc(22,-14,4,0,Math.PI*2);cx.fill();
-  // manubrio
   cx.strokeStyle='#666';cx.lineWidth=5;
   cx.beginPath();cx.moveTo(-24,-13+steer*10);cx.lineTo(24,-13-steer*10);cx.stroke();
   cx.strokeStyle='#aaa';cx.lineWidth=2;
@@ -397,42 +494,31 @@ function drawRider(){
   cx.beginPath();cx.arc(-24,-13+steer*10,4,0,Math.PI*2);cx.fill();
   cx.beginPath();cx.arc(24,-13-steer*10,4,0,Math.PI*2);cx.fill();
 
-  // ══ CASCO INTEGRAL MX ══
-  var HC=-40; // centro casco
-  // shell completo — oval grande
+  var HC=-40;
   cx.fillStyle='#e8e8e8';
   cx.beginPath();cx.ellipse(0,HC,13,14,0,0,Math.PI*2);cx.fill();
-  // mitad superior naranja
   cx.fillStyle='#e05510';
   cx.beginPath();cx.ellipse(0,HC,13,14,0,Math.PI,Math.PI*2);cx.fill();
-  // franja verde
   cx.fillStyle='#9ae62a';cx.fillRect(-13,HC,26,4);
-  // VISERA GRANDE (pico arriba — clásico MX)
   cx.fillStyle='#1a1a1a';
   cx.beginPath();cx.moveTo(-14,HC-11);cx.lineTo(-17,HC-18);cx.lineTo(17,HC-18);cx.lineTo(14,HC-11);cx.closePath();cx.fill();
   cx.fillStyle='#2a2a2a';
   cx.beginPath();cx.moveTo(-13,HC-11);cx.lineTo(-16,HC-17);cx.lineTo(16,HC-17);cx.lineTo(13,HC-11);cx.closePath();cx.fill();
-  // scoop trasero
   cx.fillStyle='#c83a00';
   cx.beginPath();cx.moveTo(-7,HC-12);cx.lineTo(-5,HC-18);cx.lineTo(5,HC-18);cx.lineTo(7,HC-12);cx.closePath();cx.fill();
-  // chin guard (borde inferior del full-face)
   cx.fillStyle='#ddd';
   cx.beginPath();cx.moveTo(-9,HC+11);cx.lineTo(-11,HC+17);cx.lineTo(11,HC+17);cx.lineTo(9,HC+11);cx.closePath();cx.fill();
   cx.fillStyle='#bbb';
   cx.beginPath();cx.moveTo(-9,HC+11);cx.lineTo(-11,HC+17);cx.lineTo(11,HC+17);cx.lineTo(9,HC+11);cx.closePath();cx.fill();
-  // neck roll
   cx.fillStyle='#111';
   cx.beginPath();cx.moveTo(-9,HC+15);cx.lineTo(-7,HC+20);cx.lineTo(7,HC+20);cx.lineTo(9,HC+15);cx.closePath();cx.fill();
-  // vents
   cx.fillStyle='rgba(0,0,0,.55)';
   cx.fillRect(-6,HC-17,3,4);cx.fillRect(-1,HC-18,4,5);cx.fillRect(4,HC-17,3,4);
-  // reflejo
   cx.strokeStyle='rgba(255,255,255,.25)';cx.lineWidth=1.5;
   cx.beginPath();cx.arc(0,HC,12,Math.PI*.2,Math.PI*.8);cx.stroke();
 
   cx.restore();
 }
-
 
 // ─── HUD ───────────────────────────────────────────────────────────
 function hud(){
@@ -452,12 +538,14 @@ function hud(){
     cx.fillStyle='#aaa';cx.font='8px monospace';cx.fillText('RECORD: '+best+' KM',14,54);}
 }
 function menu(){
-  cx.fillStyle='rgba(0,0,0,.75)';cx.fillRect(0,0,W,H);
-  cx.fillStyle='#e05510';cx.font='bold 38px Impact,Arial Black,sans-serif';cx.textAlign='center';
-  cx.fillText('TRAIL',W/2,H/2-28);cx.fillText('RIPPER',W/2,H/2+16);
-  cx.fillStyle='rgba(224,85,16,.25)';cx.fillRect(W/2-130,H/2-38,260,66);
-  cx.fillStyle='#ccc';cx.font='9px monospace';cx.fillText('← →  MOVER     ↑ / SPACE  SALTAR',W/2,H/2+44);
-  if(fn%44<28){cx.fillStyle='#9ae62a';cx.font='bold 11px monospace';cx.fillText('[ TOCA PARA INICIAR ]',W/2,H/2+72);}
+  cx.fillStyle='rgba(0,0,0,.72)';cx.fillRect(0,0,W,H);
+  cx.fillStyle='#e05510';cx.font='bold 34px Impact,Arial Black,sans-serif';cx.textAlign='center';
+  cx.fillText('CERRO ABAJO',W/2,H/2-28);
+  cx.fillStyle='#9ae62a';cx.font='bold 16px Impact,Arial Black,sans-serif';
+  cx.fillText('ARCADE',W/2,H/2+2);
+  cx.fillStyle='rgba(224,85,16,.25)';cx.fillRect(W/2-130,H/2-38,260,76);
+  cx.fillStyle='#ccc';cx.font='9px monospace';cx.fillText('← →  MOVER     ↑ / SPACE  SALTAR',W/2,H/2+50);
+  if(fn%44<28){cx.fillStyle='#9ae62a';cx.font='bold 11px monospace';cx.fillText('[ TOCA PARA INICIAR ]',W/2,H/2+76);}
 }
 function gameover(){
   cx.fillStyle='rgba(0,0,0,.82)';cx.fillRect(0,0,W,H);
@@ -475,20 +563,40 @@ function loop(){
   requestAnimationFrame(loop);
   try{
     fn++;
+    cx.save();
+    cx.setTransform(OW/W,0,0,OH/H,0,0);
     cx.clearRect(0,0,W,H);
-    sky();mountains();trail();forest();obstacles();drawRider();
+    sky();mountains();trail();houses();obstacles();drawRider();
     if(phase==='playing'){update();hud();}
     else if(phase==='menu'){menu();}
     else if(phase==='gameover'){hud();gameover();}
+    cx.restore();
+    mctx.clearRect(0,0,800,450);
+    mctx.drawImage(oc,0,0,OW,OH,0,0,800,450);
   }catch(e){console.error('ERR:',e);}
 }
 function resize(){
-  var sx=window.innerWidth/800, sy=window.innerHeight/450;
-  var s=Math.min(sx,sy);
-  cv.style.transform='scale('+s+')';
+  var vw=window.innerWidth, vh=window.innerHeight;
+  var portrait=vw<vh;
+  var s,tx=0,ty=0;
+  if(portrait){
+    s=Math.min(vw/450, vh/800);
+    tx=(vw-450*s)/2;
+    ty=(vh-800*s)/2;
+    cv.style.transform='translate('+tx+'px,'+ty+'px) rotate(-90deg) scale('+s+')';
+    cv.style.transformOrigin='225px 400px';
+    cv._portrait=true;
+  } else {
+    s=Math.min(vw/800, vh/450);
+    cv.style.transform='scale('+s+')';
+    cv.style.transformOrigin='center center';
+    cv._portrait=false;
+  }
+  cv._scale=s;
+  cv._portrait=portrait;
 }
 window.addEventListener('resize',resize);
-window.addEventListener('orientationchange',function(){setTimeout(resize,150);});
+window.addEventListener('orientationchange',function(){setTimeout(resize,200);});
 resize();
 loop();
 </script>
