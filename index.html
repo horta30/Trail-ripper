@@ -2,11 +2,11 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
 <title>CERRO ABAJO — Stage Crono Arcade</title>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-html,body{width:100%;height:100%;overflow:hidden;background:#0a0a12}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#0a0a12;touch-action:none}
 body{display:flex;justify-content:center;align-items:center;font-family:'Segoe UI',Arial,sans-serif}
 canvas{
   position:absolute;width:800px;height:450px;transform-origin:center center;
@@ -14,12 +14,16 @@ canvas{
 }
 #c{image-rendering:auto}
 #muteBtn{
-  position:fixed;top:14px;right:14px;z-index:50;width:42px;height:42px;border-radius:50%;
-  background:rgba(10,10,18,.65);border:2px solid rgba(154,230,42,.5);color:#fff;
-  font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;
-  user-select:none;backdrop-filter:blur(2px);
+  position:fixed;
+  top:max(14px,env(safe-area-inset-top));
+  right:max(14px,env(safe-area-inset-right));
+  z-index:50;width:44px;height:44px;border-radius:50%;
+  background:rgba(10,10,18,.7);border:2px solid rgba(154,230,42,.55);color:#fff;
+  font-size:19px;display:flex;align-items:center;justify-content:center;cursor:pointer;
+  user-select:none;-webkit-user-select:none;touch-action:manipulation;
+  box-shadow:0 2px 10px rgba(0,0,0,.4);
 }
-#muteBtn:active{transform:scale(.92)}
+#muteBtn:active{transform:scale(.9)}
 </style>
 </head>
 <body>
@@ -100,13 +104,15 @@ function stopMusic(){musicOn=false;}
 
 var muted=false;
 var muteBtn=document.getElementById('muteBtn');
-muteBtn.addEventListener('click',function(e){
-  e.stopPropagation();
+function toggleMute(e){
+  e.preventDefault();e.stopPropagation();
   muted=!muted;
   muteBtn.textContent=muted?'🔇':'🔊';
   if(muted)stopMusic();
   else if(phase==='playing')startMusic();
-});
+}
+muteBtn.addEventListener('click',toggleMute);
+muteBtn.addEventListener('touchstart',toggleMute,{passive:false});
 
 // ─── PERSPECTIVE ─────────────────────────────────────────────────
 function tL(z){return CAMX-(60+(480-60)*z)/2;}
@@ -365,32 +371,29 @@ function houses(){
     house(tR(z)+18*s,sy,s,i+3);
   }
 }
-function crowdBarrier(){
-  var bw=W*.30,bh=58,by=H-bh+6;
-  cx.save();
-  cx.fillStyle='#0d3a66';cx.fillRect(-10,by,bw,bh);
-  cx.fillStyle='#9ae62a';cx.font='bold 15px Impact,Arial Black,sans-serif';cx.textAlign='left';
-  cx.fillText('STAGE CRONO',6,by+bh*.62);
-  cx.fillStyle='#222';cx.fillRect(-10,by-4,bw,5);
-  for(var i=0;i<6;i++){
-    var hx=10+i*(bw/6),hy=by-10-((i*37)%10);
-    cx.fillStyle=['#caa07a','#8a5a3a','#e8c49a','#5a3a26'][i%4];
-    cx.beginPath();cx.arc(hx,hy,7,0,Math.PI*2);cx.fill();
-    cx.fillStyle='#222';cx.fillRect(hx-6,hy+5,12,8);
+
+// ─── BARRERAS DE MARCA (capa nítida — identidad SIEMPRE legible) ────
+function brandBarriers(){
+  var bw=W*.26,bh=46,by=H-bh+4;
+  mctx.save();
+  mctx.fillStyle='#0d3a66';mctx.fillRect(-4,by,bw,bh);
+  for(var i=0;i<7;i++){
+    mctx.fillStyle=i%2===0?'#f2c14e':'#1c1c1c';
+    mctx.fillRect(-4+i*(bw/7),by-7,bw/7,7);
   }
-  cx.restore();
-  cx.save();
-  cx.fillStyle='#5a1018';cx.fillRect(W-bw+10,by,bw,bh);
-  cx.fillStyle='#fff';cx.font='bold 15px Impact,Arial Black,sans-serif';cx.textAlign='right';
-  cx.fillText('GRAVITAS',W-6,by+bh*.62);
-  cx.fillStyle='#222';cx.fillRect(W-bw+10,by-4,bw,5);
-  for(var j=0;j<6;j++){
-    var hx2=W-10-j*(bw/6),hy2=by-10-((j*41)%10);
-    cx.fillStyle=['#caa07a','#8a5a3a','#e8c49a','#5a3a26'][j%4];
-    cx.beginPath();cx.arc(hx2,hy2,7,0,Math.PI*2);cx.fill();
-    cx.fillStyle='#222';cx.fillRect(hx2-6,hy2+5,12,8);
+  mctx.textAlign='left';mctx.font='bold 15px Arial,Helvetica,sans-serif';
+  strokeText(mctx,'STAGE CRONO',12,by+bh*.64,'#9ae62a','rgba(0,0,0,.55)',3);
+  mctx.restore();
+  mctx.save();
+  mctx.fillStyle='#5a1018';mctx.fillRect(W-bw+4,by,bw,bh);
+  for(var j=0;j<7;j++){
+    mctx.fillStyle=j%2===0?'#f2c14e':'#1c1c1c';
+    mctx.fillRect(W-bw+4+j*(bw/7),by-7,bw/7,7);
   }
-  cx.restore();
+  mctx.textAlign='right';mctx.font='bold 15px Arial,Helvetica,sans-serif';
+  strokeText(mctx,'GRAVITAS',W-12,by+bh*.64,'#fff','rgba(0,0,0,.55)',3);
+  mctx.restore();
+  mctx.textAlign='left';
 }
 function groundShadow(){
   if(rJ<-4){
@@ -628,7 +631,7 @@ function loop(){
     cx.save();
     cx.setTransform(OW/W,0,0,OH/H,0,0);
     cx.clearRect(0,0,W,H);
-    sky();mountains();trail();houses();groundShadow();obstacles();crowdBarrier();
+    sky();mountains();trail();houses();groundShadow();obstacles();
     drawHandlebars();
     cx.restore();
 
@@ -637,9 +640,9 @@ function loop(){
     mctx.drawImage(oc,0,0,OW,OH,0,0,800,450);
     mctx.imageSmoothingEnabled=true;
 
-    if(phase==='playing'){update();hud();}
+    if(phase==='playing'){update();brandBarriers();hud();}
     else if(phase==='menu'){menu();}
-    else if(phase==='gameover'){hud();gameover();}
+    else if(phase==='gameover'){brandBarriers();hud();gameover();}
   }catch(e){console.error('ERR:',e);}
 }
 function resize(){
