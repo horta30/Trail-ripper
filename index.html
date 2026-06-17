@@ -24,11 +24,23 @@ canvas{
   box-shadow:0 2px 10px rgba(0,0,0,.4);
 }
 #muteBtn:active{transform:scale(.9)}
+#fsBtn{
+  position:fixed;
+  top:max(14px,env(safe-area-inset-top));
+  left:max(14px,env(safe-area-inset-left));
+  z-index:50;width:44px;height:44px;border-radius:50%;
+  background:rgba(10,10,18,.7);border:2px solid rgba(224,85,16,.55);color:#fff;
+  font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;
+  user-select:none;-webkit-user-select:none;touch-action:manipulation;
+  box-shadow:0 2px 10px rgba(0,0,0,.4);
+}
+#fsBtn:active{transform:scale(.9)}
 </style>
 </head>
 <body>
 <canvas id="c" width="800" height="450"></canvas>
 <button id="muteBtn" aria-label="Silenciar música">🔊</button>
+<button id="fsBtn" aria-label="Pantalla completa">⛶</button>
 <script>
 var cv=document.getElementById('c'),mctx=cv.getContext('2d');
 mctx.imageSmoothingEnabled=true;
@@ -113,6 +125,37 @@ function toggleMute(e){
 }
 muteBtn.addEventListener('click',toggleMute);
 muteBtn.addEventListener('touchstart',toggleMute,{passive:false});
+
+// ─── PANTALLA COMPLETA (clave para mobile embebido en iframe) ──────
+var fsBtn=document.getElementById('fsBtn');
+var fsSupported = !!(document.documentElement.requestFullscreen ||
+                      document.documentElement.webkitRequestFullscreen);
+if(!fsSupported){
+  fsBtn.style.display='none'; // iOS Safari en iPhone no soporta fullscreen de elementos
+} else {
+  function toggleFullscreen(e){
+    e.preventDefault();e.stopPropagation();
+    var isFs = document.fullscreenElement || document.webkitFullscreenElement;
+    if(!isFs){
+      var el=document.documentElement;
+      if(el.requestFullscreen)el.requestFullscreen().catch(function(){});
+      else if(el.webkitRequestFullscreen)el.webkitRequestFullscreen();
+    } else {
+      if(document.exitFullscreen)document.exitFullscreen();
+      else if(document.webkitExitFullscreen)document.webkitExitFullscreen();
+    }
+  }
+  fsBtn.addEventListener('click',toggleFullscreen);
+  fsBtn.addEventListener('touchstart',toggleFullscreen,{passive:false});
+  document.addEventListener('fullscreenchange',function(){
+    fsBtn.textContent=document.fullscreenElement?'✕':'⛶';
+    setTimeout(resize,80);
+  });
+  document.addEventListener('webkitfullscreenchange',function(){
+    fsBtn.textContent=document.webkitFullscreenElement?'✕':'⛶';
+    setTimeout(resize,80);
+  });
+}
 
 // ─── PERSPECTIVE ─────────────────────────────────────────────────
 function tL(z){return CAMX-(60+(480-60)*z)/2;}
@@ -372,29 +415,6 @@ function houses(){
   }
 }
 
-// ─── BARRERAS DE MARCA (capa nítida — identidad SIEMPRE legible) ────
-function brandBarriers(){
-  var bw=W*.26,bh=46,by=H-bh+4;
-  mctx.save();
-  mctx.fillStyle='#0d3a66';mctx.fillRect(-4,by,bw,bh);
-  for(var i=0;i<7;i++){
-    mctx.fillStyle=i%2===0?'#f2c14e':'#1c1c1c';
-    mctx.fillRect(-4+i*(bw/7),by-7,bw/7,7);
-  }
-  mctx.textAlign='left';mctx.font='bold 15px Arial,Helvetica,sans-serif';
-  strokeText(mctx,'STAGE CRONO',12,by+bh*.64,'#9ae62a','rgba(0,0,0,.55)',3);
-  mctx.restore();
-  mctx.save();
-  mctx.fillStyle='#5a1018';mctx.fillRect(W-bw+4,by,bw,bh);
-  for(var j=0;j<7;j++){
-    mctx.fillStyle=j%2===0?'#f2c14e':'#1c1c1c';
-    mctx.fillRect(W-bw+4+j*(bw/7),by-7,bw/7,7);
-  }
-  mctx.textAlign='right';mctx.font='bold 15px Arial,Helvetica,sans-serif';
-  strokeText(mctx,'GRAVITAS',W-12,by+bh*.64,'#fff','rgba(0,0,0,.55)',3);
-  mctx.restore();
-  mctx.textAlign='left';
-}
 function groundShadow(){
   if(rJ<-4){
     var bx=wX(rNX,1);
@@ -535,18 +555,28 @@ function hud(){
   mctx.fillStyle='rgba(10,10,18,.55)';pillC(mctx,W-112,8,104,30,7);mctx.fill();
   for(var i=0;i<3;i++)heartC(mctx,W-92+i*26,23,1.7,i<lives);
 
-  // VELOCIDAD + TURBO — abajo izquierda
+  // VELOCIDAD + TURBO — panel único, etiqueta y barra separadas
   var spd=(speed-1.6)/3.2;
-  mctx.fillStyle='rgba(10,10,18,.5)';pillC(mctx,8,H-46,150,16,5);mctx.fill();
-  mctx.fillStyle='hsl('+(120-spd*120)+',80%,55%)';pillC(mctx,8,H-46,Math.max(5,150*spd),16,5);mctx.fill();
-  mctx.font='bold 8px Arial';mctx.fillStyle='rgba(255,255,255,.9)';
-  mctx.fillText(Math.round(speed*22)+' KM/H',14,H-35);
+  var pX=8,pY=H-62,pW=168,pH=54;
+  mctx.fillStyle='rgba(10,10,18,.6)';pillC(mctx,pX,pY,pW,pH,8);mctx.fill();
 
-  mctx.fillStyle='rgba(10,10,18,.5)';pillC(mctx,8,H-24,150,16,5);mctx.fill();
-  var tcol=turboActive>0?'#fff':'#ffae3a';
-  mctx.fillStyle=tcol;pillC(mctx,8,H-24,Math.max(5,150*(turbo/100)),16,5);mctx.fill();
-  mctx.font='bold 8px Arial';mctx.fillStyle='rgba(255,255,255,.9)';
-  mctx.fillText(turboActive>0?'¡TURBO ACTIVO!':'TURBO',14,H-13);
+  // Fila velocidad
+  mctx.font='bold 8px Arial';mctx.fillStyle='#9ae62a';mctx.textAlign='left';
+  mctx.fillText('VELOCIDAD',pX+10,pY+13);
+  mctx.textAlign='right';mctx.fillStyle='#fff';
+  mctx.fillText(Math.round(speed*22)+' KM/H',pX+pW-10,pY+13);
+  mctx.textAlign='left';
+  mctx.fillStyle='rgba(0,0,0,.35)';pillC(mctx,pX+10,pY+18,pW-20,8,4);mctx.fill();
+  mctx.fillStyle='hsl('+(120-spd*120)+',75%,50%)';pillC(mctx,pX+10,pY+18,Math.max(4,(pW-20)*spd),8,4);mctx.fill();
+
+  // Fila turbo
+  mctx.font='bold 8px Arial';mctx.fillStyle=turboActive>0?'#ffae3a':'#9ae62a';mctx.textAlign='left';
+  mctx.fillText(turboActive>0?'¡TURBO ACTIVO!':'TURBO',pX+10,pY+38);
+  mctx.textAlign='right';mctx.fillStyle='#fff';
+  mctx.fillText(turboActive>0?'⚡':Math.round(turbo)+'%',pX+pW-10,pY+38);
+  mctx.textAlign='left';
+  mctx.fillStyle='rgba(0,0,0,.35)';pillC(mctx,pX+10,pY+43,pW-20,8,4);mctx.fill();
+  mctx.fillStyle=turboActive>0?'#fff':'#ffae3a';pillC(mctx,pX+10,pY+43,Math.max(4,(pW-20)*(turbo/100)),8,4);mctx.fill();
 
   // Popup de truco
   if(trick&&trick.timer>0){
@@ -640,9 +670,9 @@ function loop(){
     mctx.drawImage(oc,0,0,OW,OH,0,0,800,450);
     mctx.imageSmoothingEnabled=true;
 
-    if(phase==='playing'){update();brandBarriers();hud();}
+    if(phase==='playing'){update();hud();}
     else if(phase==='menu'){menu();}
-    else if(phase==='gameover'){brandBarriers();hud();gameover();}
+    else if(phase==='gameover'){hud();gameover();}
   }catch(e){console.error('ERR:',e);}
 }
 function resize(){
