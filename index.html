@@ -13,10 +13,18 @@ canvas{
   box-shadow:0 0 60px rgba(255,150,40,.25);cursor:crosshair;touch-action:none;
 }
 #c{image-rendering:auto}
+#muteBtn{
+  position:fixed;top:14px;right:14px;z-index:50;width:42px;height:42px;border-radius:50%;
+  background:rgba(10,10,18,.65);border:2px solid rgba(154,230,42,.5);color:#fff;
+  font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;
+  user-select:none;backdrop-filter:blur(2px);
+}
+#muteBtn:active{transform:scale(.92)}
 </style>
 </head>
 <body>
 <canvas id="c" width="800" height="450"></canvas>
+<button id="muteBtn" aria-label="Silenciar música">🔊</button>
 <script>
 var cv=document.getElementById('c'),mctx=cv.getContext('2d');
 mctx.imageSmoothingEnabled=true;
@@ -87,8 +95,18 @@ function scheduleMusicStep(){
   var delay=(musicNextTime-AC.currentTime-.05)*1000;
   setTimeout(scheduleMusicStep,Math.max(0,delay));
 }
-function startMusic(){if(!AC||musicOn)return;musicOn=true;musicStep=0;musicNextTime=AC.currentTime+.05;scheduleMusicStep();}
+function startMusic(){if(!AC||musicOn||muted)return;musicOn=true;musicStep=0;musicNextTime=AC.currentTime+.05;scheduleMusicStep();}
 function stopMusic(){musicOn=false;}
+
+var muted=false;
+var muteBtn=document.getElementById('muteBtn');
+muteBtn.addEventListener('click',function(e){
+  e.stopPropagation();
+  muted=!muted;
+  muteBtn.textContent=muted?'🔇':'🔊';
+  if(muted)stopMusic();
+  else if(phase==='playing')startMusic();
+});
 
 // ─── PERSPECTIVE ─────────────────────────────────────────────────
 function tL(z){return CAMX-(60+(480-60)*z)/2;}
@@ -257,27 +275,6 @@ function strokeText(c,txt,x,y,fill,strokeCol,lw){
   c.fillStyle=fill;c.fillText(txt,x,y);
 }
 
-// ─── LOGO (mundo pixelado, fondo del cielo) ─────────────────────────
-function drawSkyLogo(){
-  cx.save();cx.translate(W/2,22);
-  cx.save();cx.translate(-55,6);cx.scale(.48,.48);
-  cx.strokeStyle='#9ae62a';cx.lineWidth=5;
-  cx.beginPath();
-  var pts=[[-20,-34],[20,-34],[38,0],[20,34],[-20,34],[-38,0]];
-  cx.moveTo(pts[0][0],pts[0][1]);
-  for(var p=1;p<pts.length;p++)cx.lineTo(pts[p][0],pts[p][1]);
-  cx.closePath();cx.stroke();
-  cx.beginPath();cx.arc(0,0,20,Math.PI*.6,Math.PI*1.4);cx.stroke();
-  cx.fillStyle='#9ae62a';
-  cx.beginPath();cx.moveTo(4,-26);cx.lineTo(-8,2);cx.lineTo(2,2);cx.lineTo(-4,26);cx.lineTo(14,-2);cx.lineTo(4,-2);cx.closePath();cx.fill();
-  cx.restore();
-  cx.fillStyle='rgba(255,255,255,.85)';cx.font='bold 15px Impact,Arial Black,sans-serif';
-  cx.textAlign='left';cx.fillText('STAGE',-22,-3);
-  cx.fillStyle='rgba(154,230,42,.9)';cx.font='bold 17px Impact,Arial Black,sans-serif';
-  cx.fillText('CRONO',-22,14);
-  cx.restore();
-}
-
 // ─── ESCENA (pixel-art, baja resolución) ───────────────────────────
 function sky(){
   var g=cx.createLinearGradient(0,0,0,HY+30);
@@ -289,7 +286,6 @@ function sky(){
   cx.fillStyle='#1f4a5c';cx.fillRect(0,HY-6,W,10);
   cx.strokeStyle='rgba(255,220,180,.35)';cx.lineWidth=1;
   for(var wv=0;wv<W;wv+=26){cx.beginPath();cx.moveTo(wv,HY-2);cx.lineTo(wv+14,HY-2);cx.stroke();}
-  drawSkyLogo();
 }
 function mountains(){
   cx.beginPath();cx.moveTo(0,HY+12);
@@ -477,9 +473,18 @@ function drawHandlebars(){
   cx.beginPath();cx.ellipse(-138,-4,24,9,0,0,Math.PI*2);cx.fill();
   cx.beginPath();cx.ellipse(138,-4,24,9,0,0,Math.PI*2);cx.fill();
   cx.fillStyle='#0d0d0d';
-  cx.beginPath();cx.ellipse(0,70,46,16,0,0,Math.PI);cx.fill();
-  cx.strokeStyle='#444';cx.lineWidth=4;
-  cx.beginPath();cx.ellipse(0,70,40,12,0,0,Math.PI);cx.stroke();
+  cx.beginPath();cx.ellipse(0,66,58,22,0,0,Math.PI);cx.fill();
+  cx.strokeStyle='#9ae62a';cx.lineWidth=3;
+  cx.beginPath();cx.ellipse(0,66,58,22,0,0,Math.PI);cx.stroke();
+  cx.strokeStyle='#444';cx.lineWidth=5;
+  cx.beginPath();cx.ellipse(0,66,48,17,0,0,Math.PI);cx.stroke();
+  cx.strokeStyle='#666';cx.lineWidth=2;
+  cx.beginPath();cx.ellipse(0,66,36,11,0,0,Math.PI);cx.stroke();
+  // hub central — marca exacta el eje del jugador
+  cx.fillStyle='#9ae62a';
+  cx.beginPath();cx.arc(0,60,4,0,Math.PI*2);cx.fill();
+  cx.fillStyle='rgba(154,230,42,.25)';
+  cx.beginPath();cx.arc(0,60,10,0,Math.PI*2);cx.fill();
   cx.restore();
 }
 
