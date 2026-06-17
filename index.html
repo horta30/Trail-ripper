@@ -3,69 +3,73 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
-<title>Trail Ripper — Valpo POV Arcade</title>
+<title>Trail Ripper — Valpo POV Arcade V3</title>
 <style>
-*{box-sizing:border-box;margin:0;padding:0}html,body{width:100%;height:100%;overflow:hidden;background:#06070d;display:flex;align-items:center;justify-content:center}canvas{width:960px;height:540px;max-width:100vw;max-height:100vh;image-rendering:pixelated;image-rendering:crisp-edges;box-shadow:0 0 70px rgba(255,190,40,.22);background:#000;touch-action:none}.hint{position:fixed;bottom:12px;left:0;right:0;text-align:center;color:#fff8;font:12px monospace;pointer-events:none}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;overflow:hidden;background:#07080d;display:flex;align-items:center;justify-content:center;font-family:system-ui,Arial,sans-serif}
+  canvas{width:1280px;height:720px;max-width:100vw;max-height:100vh;background:#000;box-shadow:0 0 80px rgba(255,180,60,.18);touch-action:none;border-radius:6px}
+  .hint{position:fixed;bottom:10px;left:0;right:0;text-align:center;color:#ffffff99;font:13px monospace;pointer-events:none}
 </style>
 </head>
 <body>
-<canvas id="game" width="960" height="540"></canvas>
+<canvas id="game" width="1280" height="720"></canvas>
 <div class="hint">← → mover · ↑/SPACE saltar · Q backflip · E whip · click/touch iniciar</div>
 <script>
-const canvas=document.getElementById('game'), screen=canvas.getContext('2d'); screen.imageSmoothingEnabled=false;
-const W=320,H=180,SCALE=3;
-const px=document.createElement('canvas'); px.width=W; px.height=H;
-const ctx=px.getContext('2d'); ctx.imageSmoothingEnabled=false;
-let state='menu', frame=0, dist=0, score=0, best=Number(localStorage.valpoBest||0), lives=3;
-let x=0,vx=0,y=0,vy=0,onGround=true,speed=1.4,shake=0,combo=0,trick='',trickTimer=0,rot=0,whip=0;
-let obstacles=[],spawn=0,keys={},touchX=null;
-const colors=['#e44b54','#25a6d9','#f2c14e','#50c878','#df7adf','#f06f2f','#f5eee2'];
+const canvas=document.getElementById('game');
+const ctx=canvas.getContext('2d'); ctx.imageSmoothingEnabled=true;
+const W=1280,H=720;
+let state='menu', frame=0, dist=0, score=0, best=Number(localStorage.trailRipperBestV3||0), lives=3, timeLeft=90;
+let riderX=0, vx=0, airY=0, vy=0, onGround=true, speed=2.2, shake=0;
+let obstacles=[], particles=[], keys={}, touchX=null, combo=0, trick='', trickTimer=0, rot=0, whip=0, airScore=0;
+const palette=['#d84b43','#188bc0','#f2c94c','#38a96b','#b55ad6','#ea7a32','#efe7d3'];
 function rnd(a,b){return a+Math.random()*(b-a)}
 function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
-function zY(z){return 58+z*120} function zW(z){return 18+z*250} function laneX(nx,z){return W/2+nx*zW(z)/2}
-function roadL(z){return W/2-zW(z)/2} function roadR(z){return W/2+zW(z)/2}
-function reset(){state='play';dist=0;score=0;lives=3;x=0;vx=0;y=0;vy=0;onGround=true;speed=1.4;obstacles=[];spawn=0;combo=0;trick='';rot=0;whip=0;}
-addEventListener('keydown',e=>{keys[e.code]=true;if(state!=='play')reset();}); addEventListener('keyup',e=>keys[e.code]=false);
-canvas.addEventListener('pointerdown',e=>{if(state!=='play')reset(); const r=canvas.getBoundingClientRect(); touchX=(e.clientX-r.left)/r.width;});
-canvas.addEventListener('pointermove',e=>{const r=canvas.getBoundingClientRect(); touchX=(e.clientX-r.left)/r.width;});
+function rect(x,y,w,h,c){ctx.fillStyle=c;ctx.fillRect(x,y,w,h)}
+function text(t,x,y,s=20,c='#fff',a='left'){ctx.fillStyle=c;ctx.font=`800 ${s}px monospace`;ctx.textAlign=a;ctx.fillText(t,x,y)}
+function curveAt(z){const d=dist*.006; return Math.sin(d+z*4.3)*.26 + Math.sin(d*.55+z*9.5)*.12 + Math.sin(d*.25+z*16)*.05}
+function widthAt(z){return 80+z*980}
+function yAt(z){return 210 + Math.pow(z,1.45)*500 + Math.sin(dist*.016+z*11)*18*z}
+function centerAt(z){return W/2 + curveAt(z)*390*z}
+function roadL(z){return centerAt(z)-widthAt(z)/2}
+function roadR(z){return centerAt(z)+widthAt(z)/2}
+function laneX(nx,z){return centerAt(z)+nx*widthAt(z)*.48}
+function reset(){state='play';frame=0;dist=0;score=0;lives=3;timeLeft=90;riderX=0;vx=0;airY=0;vy=0;onGround=true;speed=2.2;shake=0;combo=0;trick='';trickTimer=0;rot=0;whip=0;airScore=0;obstacles=[];particles=[];for(let i=0;i<9;i++)spawn(i*55+90)}
+addEventListener('keydown',e=>{keys[e.code]=true;if(state!=='play')reset()});
+addEventListener('keyup',e=>keys[e.code]=false);
+canvas.addEventListener('pointerdown',e=>{if(state!=='play')reset(); const r=canvas.getBoundingClientRect(); touchX=(e.clientX-r.left)/r.width});
+canvas.addEventListener('pointermove',e=>{const r=canvas.getBoundingClientRect(); touchX=(e.clientX-r.left)/r.width});
 canvas.addEventListener('pointerup',()=>touchX=null);
-function jump(power=5.8){if(onGround){vy=-power;onGround=false;combo=0;}}
-function addObstacle(){let type=Math.random()<.36?'ramp':Math.random()<.62?'stairs':Math.random()<.82?'barrel':'gap';obstacles.push({z:0,nx:rnd(-.72,.72),type,hit:false,used:false});}
-function update(){frame++; speed=Math.min(3.9,1.45+dist*.0009); dist+=speed; score=Math.floor(dist*3)+combo*250;
- let ax=0; if(keys.ArrowLeft||keys.KeyA)ax=-1; if(keys.ArrowRight||keys.KeyD)ax=1; if(touchX!==null)ax=touchX<.38?-1:touchX>.62?1:0;
- vx+=ax*.028; vx*=.86; x=clamp(x+vx,-.9,.9);
- if(keys.Space||keys.ArrowUp)jump();
- if(!onGround){vy+=.22;y+=vy;if(keys.KeyQ){rot+=.16; trick='BACKFLIP'; trickTimer=45;} if(keys.KeyE){whip=Math.sin(frame*.55)*1.2; trick='WHIP'; trickTimer=45;} if(y>=0){y=0;vy=0;onGround=true;if(Math.abs(rot)>5.4){combo++;score+=1250}else if(Math.abs(whip)>.75){combo++;score+=450}rot=0;whip=0;}}
- if(trickTimer>0)trickTimer--; else trick='';
- spawn-=speed; if(spawn<=0){addObstacle();spawn=rnd(24,43)-speed*2;}
- for(let i=obstacles.length-1;i>=0;i--){let o=obstacles[i];o.z+=speed*.011;if(o.type==='ramp'&&!o.used&&o.z>.83&&o.z<1.04&&Math.abs(x-o.nx)<.23){o.used=true;jump(7.7);combo++;}
-  if(!o.hit&&o.type!=='ramp'&&o.z>.88&&o.z<1.05&&Math.abs(x-o.nx)<.18&&y>-16){o.hit=true;lives--;shake=10;if(lives<=0){best=Math.max(best,score);localStorage.valpoBest=best;state='over';}else{vy=-4;onGround=false;}}
-  if(o.z>1.25)obstacles.splice(i,1);
- }}
-function rect(x,y,w,h,c){ctx.fillStyle=c;ctx.fillRect(Math.round(x),Math.round(y),Math.round(w),Math.round(h))}
-function text(t,x,y,size=8,c='#fff',align='left'){ctx.fillStyle=c;ctx.font=`bold ${size}px monospace`;ctx.textAlign=align;ctx.fillText(t,x,y)}
-function drawSky(){let g=ctx.createLinearGradient(0,0,0,75);g.addColorStop(0,'#0f61a6');g.addColorStop(.65,'#43a5d8');g.addColorStop(1,'#f4c06b');ctx.fillStyle=g;ctx.fillRect(0,0,W,78);rect(0,48,W,14,'#1b6c94'); for(let i=0;i<36;i++)rect((i*37-frame*.12)%W,53+(i%3),9,1,'#aee8ff');
- for(let i=0;i<8;i++){rect(i*48+6,27+(i%2)*5,14,3,'#fff');rect(i*48+14,24+(i%2)*5,18,4,'#fff');}
-}
-function drawHills(){ctx.fillStyle='#4b3760';ctx.beginPath();ctx.moveTo(0,58);for(let i=0;i<=W;i+=10)ctx.lineTo(i,45+Math.sin(i*.035)*7+Math.sin(i*.011)*10);ctx.lineTo(W,65);ctx.lineTo(0,65);ctx.fill(); for(let i=0;i<90;i++)rect((i*29+frame*.25)%W,51+(i*7)%15,1,1,i%4?'#ffd27a':'#fff1b0');}
-function house(x,y,s,i){let c=colors[i%colors.length]; rect(x-10*s,y-18*s,20*s,18*s,c); rect(x-12*s,y-23*s,24*s,6*s,'#7c3b22');rect(x-6*s,y-12*s,4*s,4*s,'#ffe08a');rect(x+3*s,y-12*s,4*s,4*s,'#ffe08a');rect(x-2*s,y-6*s,5*s,6*s,'#2a1b24')}
-function drawCity(){for(let side=-1;side<=1;side+=2){for(let i=0;i<12;i++){let z=((i/12)+(frame*.002))%1, s=.28+z*.8, y=zY(z)-6, xx=(side<0?roadL(z)-18*s:roadR(z)+18*s);house(xx,y,s,i+(side>0?4:0));}}}
-function drawRoad(){ctx.fillStyle='#181822';ctx.fillRect(0,58,W,122);ctx.beginPath();ctx.moveTo(roadL(0),58);ctx.lineTo(roadR(0),58);ctx.lineTo(roadR(1),H);ctx.lineTo(roadL(1),H);ctx.closePath();ctx.fillStyle='#6d6b70';ctx.fill();
- for(let i=0;i<18;i++){let z=((i/18)+(frame*speed*.006))%1,y=zY(z);ctx.strokeStyle='rgba(30,30,35,.45)';ctx.lineWidth=1+z*2;ctx.beginPath();ctx.moveTo(roadL(z),y);ctx.lineTo(roadR(z),y);ctx.stroke();}
- for(let n=-3;n<=3;n++){ctx.strokeStyle='rgba(40,35,38,.28)';ctx.beginPath();ctx.moveTo(laneX(n*.22,0),58);ctx.lineTo(laneX(n*.22,1),180);ctx.stroke();}
- for(let i=0;i<7;i++){let z=((i/7)+(frame*speed*.004))%1;if(i%2){ctx.fillStyle='#f8d24b';ctx.beginPath();ctx.moveTo(laneX(-.03,z),zY(z));ctx.lineTo(laneX(.03,z),zY(z));ctx.lineTo(laneX(.04,z+.09),zY(z+.09));ctx.lineTo(laneX(-.04,z+.09),zY(z+.09));ctx.fill();}}
-}
-function drawCrowd(){for(let s=-1;s<=1;s+=2){for(let i=0;i<28;i++){let z=((i/28)+(frame*.004))%1, y=zY(z)+4, x0=s<0?roadL(z)-5-z*25:roadR(z)+5+z*25;rect(x0,y,2+z*2,5+z*5,['#111','#e34','#3af','#fd3','#fff'][i%5]);}}
- rect(8,98,54,9,'#111');text('OXFORD',12,106,8,'#fff'); rect(255,100,55,9,'#162b88');text('RED BULL',259,108,7,'#ffd23a');}
-function drawObstacles(){let arr=[...obstacles].sort((a,b)=>a.z-b.z);for(const o of arr){if(o.z<.05)continue;let s=.35+o.z*1.6, xx=laneX(o.nx,o.z), yy=zY(o.z);ctx.save();ctx.translate(xx,yy);ctx.scale(s,s); if(o.type==='ramp'){rect(-10,-4,20,4,'#bfae9a');ctx.fillStyle='#9b8d7c';ctx.beginPath();ctx.moveTo(-12,0);ctx.lineTo(12,0);ctx.lineTo(12,-3);ctx.lineTo(-12,-12);ctx.fill();text('JUMP',-8,-5,4,'#111');} else if(o.type==='stairs'){for(let k=0;k<4;k++)rect(-13+k*3,-k*3,26-k*5,3,'#aaa');} else if(o.type==='barrel'){rect(-6,-12,12,12,o.hit?'#f22':'#f2c14e');rect(-7,-13,14,2,'#222');} else {rect(-16,-3,32,6,'#171717');rect(-16,-6,32,2,'#ffcc33');} ctx.restore();}}
-function drawPOV(){let bob=Math.sin(frame*.28)*1.2+(onGround?0:y*.08);let cx0=W/2+x*18, cy=154+bob; ctx.save();ctx.translate(cx0,cy);ctx.rotate(vx*.65+whip*.08);
- ctx.strokeStyle='#111';ctx.lineWidth=7;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(-78,6);ctx.quadraticCurveTo(0,-8,78,6);ctx.stroke();ctx.strokeStyle='#6e6e6e';ctx.lineWidth=2;ctx.stroke();
- rect(-99,1,28,15,'#1646c7');rect(71,1,28,15,'#1646c7');rect(-22,4,44,24,'#0d43b8');rect(-9,-5,18,18,'#0b0b0f');rect(-5,-1,10,10,'#555');
- ctx.strokeStyle='#c58a5a';ctx.lineWidth=8;ctx.beginPath();ctx.moveTo(-70,7);ctx.lineTo(-105,32);ctx.moveTo(70,7);ctx.lineTo(105,32);ctx.stroke();ctx.strokeStyle='#1646c7';ctx.lineWidth=10;ctx.beginPath();ctx.moveTo(-76,4);ctx.lineTo(-104,22);ctx.moveTo(76,4);ctx.lineTo(104,22);ctx.stroke();ctx.restore();
- if(!onGround){text('AIR',W/2,35,11,'#ffd23a','center'); if(rot)text('BACKFLIP x'+combo,W/2,48,8,'#fff','center'); if(Math.abs(whip)>.1)text('WHIP',W/2,60,8,'#fff','center');}}
-function hud(){rect(4,4,64,20,'#000');text('TIEMPO',8,12,6,'#ffd23a');let t=Math.max(0,90-Math.floor(dist/45));text('01:'+String(t).padStart(2,'0'),8,23,11,'#fff');rect(128,4,64,20,'#000');text('PUNTOS',141,12,6,'#ffd23a');text(String(score).padStart(5,'0'),139,24,11,'#fff');rect(249,4,67,20,'#000');text('VIDAS',257,12,6,'#ffd23a');text('♥'.repeat(lives),258,24,11,'#f33');rect(250,158,65,18,'#000');text('KM/H',256,166,6,'#ffd23a');text(Math.floor(speed*26),285,174,13,'#fff','right'); if(trickTimer>0){rect(6,56,76,30,'#000');text('TRUCO!',10,66,8,'#ffd23a');text(trick,10,78,9,'#fff');}}
-function overlay(title,sub){ctx.fillStyle='rgba(0,0,0,.72)';ctx.fillRect(0,0,W,H);text(title,W/2,78,18,'#ffd23a','center');text(sub,W/2,98,8,'#fff','center');text('VALPARAISO CERRO ABAJO - STAGE CRONO ARCADE',W/2,127,7,'#9ae6ff','center');}
-function render(){if(state==='play')update();frame++; ctx.save();ctx.translate((shake?rnd(-shake,shake):0),(shake?rnd(-shake,shake):0));if(shake)shake*=.82; drawSky();drawHills();drawRoad();drawCity();drawCrowd();drawObstacles();drawPOV();hud();ctx.restore(); if(state==='menu')overlay('TRAIL RIPPER','click / tecla para bajar el cerro'); if(state==='over')overlay('CAIDA - GAME OVER','score '+score+' · record '+best+' · click para reintentar'); screen.clearRect(0,0,960,540);screen.drawImage(px,0,0,960,540);requestAnimationFrame(render)}
+function jump(p=9.2){if(onGround){vy=-p;onGround=false;airScore=0}}
+function spawn(off=240){const r=Math.random();let type=r<.25?'ramp':r<.42?'stairs':r<.58?'barrel':r<.73?'gap':r<.88?'rock':'gate';let nx=rnd(-.62,.62); if(type==='gate')nx=curveAt(1)>0?-.72:.72; obstacles.push({w:dist+off,nx,type,hit:false,used:false,passed:false})}
+function crash(msg='HIT!'){if(state!=='play')return;lives--;shake=22;trick=msg;trickTimer=55;combo=0;speed=Math.max(1.8,speed*.72);for(let i=0;i<28;i++)particles.push({x:W/2+riderX*80+rnd(-35,35),y:585+rnd(-15,20),vx:rnd(-5,5),vy:rnd(-7,2),life:rnd(20,45),c:i%3?'#fff':'#ffce39'});if(lives<=0){best=Math.max(best,score);localStorage.trailRipperBestV3=best;state='over'}else{airY=-30;vy=-5;onGround=false;vx*=.2}}
+function update(){frame++;timeLeft=Math.max(0,90-Math.floor(dist/105)); if(timeLeft<=0){trick='TIME OUT';trickTimer=20;best=Math.max(best,score);state='over'}
+  speed=clamp(speed+.003,2.05,5.1); dist+=speed;
+  let ax=0;if(keys.ArrowLeft||keys.KeyA)ax=-1;if(keys.ArrowRight||keys.KeyD)ax=1;if(touchX!==null)ax=touchX<.43?-1:touchX>.57?1:0;
+  vx+=ax*.038; vx-=curveAt(1)*.008*speed; vx*=.88; riderX=clamp(riderX+vx,-1.12,1.12);
+  if(keys.Space||keys.ArrowUp)jump();
+  if(!onGround){vy+=.31; airY+=vy; if(keys.KeyQ){rot+=.2;trick='BACKFLIP';trickTimer=35;airScore=1300} if(keys.KeyE){whip=Math.sin(frame*.58)*1.25;trick='WHIP';trickTimer=35;airScore=Math.max(airScore,520)} if(airY>=0){airY=0;vy=0;onGround=true;if(Math.abs(rot)>5.4||Math.abs(whip)>.75){combo++;score+=airScore+combo*260}rot=0;whip=0;airScore=0}}
+  if(trickTimer>0)trickTimer--; else trick='';
+  const far=obstacles.reduce((m,o)=>Math.max(m,o.w),dist+150); if(far<dist+520)spawn(rnd(360,540));
+  for(let i=obstacles.length-1;i>=0;i--){const o=obstacles[i];const rel=(o.w-dist)/330;o.z=1-rel;
+    if(o.z>.74&&o.z<1.08&&!o.used&&o.type==='ramp'&&Math.abs(riderX-o.nx)<.25){o.used=true;jump(11.2);combo++;score+=220}
+    if(o.z>.88&&o.z<1.10&&!o.hit&&o.type!=='ramp'){const dx=Math.abs(riderX-o.nx);const hitW=o.type==='gap'?0.34:o.type==='gate'?0.45:0.22;const safe=(o.type==='gap'||o.type==='stairs')&&airY<-42;if(dx<hitW&&!safe){o.hit=true;crash(o.type==='gap'?'GAP!':o.type==='gate'?'CURVA!':'HIT!')}}
+    if(o.z>1.14&&!o.passed){o.passed=true;if(!o.hit)score+=80+Math.floor(speed*18)} if(o.z>1.5)obstacles.splice(i,1)}
+  if(Math.abs(riderX)>.96&&onGround){speed-=.055;shake=Math.max(shake,4); if(Math.abs(riderX)>1.06)crash('FUERA!')}
+  score+=Math.floor(speed*1.4); particles=particles.filter(p=>(p.x+=p.vx,p.y+=p.vy,p.vy+=.22,--p.life>0))}
+function sky(){let g=ctx.createLinearGradient(0,0,0,250);g.addColorStop(0,'#78c5ed');g.addColorStop(.62,'#b8e5fa');g.addColorStop(1,'#f5bd72');rect(0,0,W,260,g);rect(0,210,W,55,'#197aa7');for(let i=0;i<55;i++)rect((i*79-frame*.18)%W,225+(i%5)*3,28,2,'#d8f8ff');ctx.fillStyle='#6a5570';ctx.beginPath();ctx.moveTo(0,225);for(let x=0;x<=W;x+=30)ctx.lineTo(x,180+Math.sin(x*.018+dist*.001)*30+Math.sin(x*.006)*55);ctx.lineTo(W,260);ctx.lineTo(0,260);ctx.fill()}
+function house(x,y,s,i){const c=palette[i%palette.length];ctx.save();ctx.translate(x,y);ctx.scale(s,s);rect(-36,-70,72,70,c);rect(-42,-88,84,20,'#7b4224');rect(-22,-45,16,18,'#ffe08a');rect(10,-45,16,18,'#ffe08a');rect(-9,-22,18,22,'#23181d');ctx.restore()}
+function city(){for(let side=-1;side<=1;side+=2){for(let i=0;i<22;i++){let z=((i/22)+(dist*.0032))%1;if(z<.04)continue;let s=.28+z*1.5,yy=yAt(z)-12,xx=side<0?roadL(z)-50*s-z*80:roadR(z)+50*s+z*80;house(xx,yy,s,i+(side>0?6:0));if(z>.35){rect(side<0?roadL(z)-10:roadR(z)+5,yAt(z),5+z*8,60*z,'#d9d9d9')}}}
+ ctx.strokeStyle='rgba(20,20,20,.75)';ctx.lineWidth=2;for(let k=0;k<5;k++){ctx.beginPath();ctx.moveTo(0,70+k*28);for(let x=0;x<=W;x+=70)ctx.lineTo(x,65+k*28+Math.sin(x*.02+dist*.006+k)*16);ctx.stroke()}}
+function road(){rect(0,210,W,510,'#171820');for(let i=0;i<70;i++){let z0=i/70,z1=(i+1)/70;ctx.beginPath();ctx.moveTo(roadL(z0),yAt(z0));ctx.lineTo(roadR(z0),yAt(z0));ctx.lineTo(roadR(z1),yAt(z1));ctx.lineTo(roadL(z1),yAt(z1));ctx.closePath();ctx.fillStyle=i%2?'#6c6965':'#7b7770';ctx.fill();if(i%5===0){ctx.strokeStyle='rgba(40,35,34,.35)';ctx.beginPath();ctx.moveTo(roadL(z1),yAt(z1));ctx.lineTo(roadR(z1),yAt(z1));ctx.stroke()}}
+ for(let n=-3;n<=3;n++){ctx.strokeStyle=n===0?'rgba(255,213,68,.85)':'rgba(30,28,28,.28)';ctx.lineWidth=n===0?4:2;ctx.beginPath();for(let i=0;i<=70;i++){let z=i/70,x=laneX(n*.18,z),y=yAt(z);i?ctx.lineTo(x,y):ctx.moveTo(x,y)}ctx.stroke()}for(let k=0;k<10;k++){let z=((k/10)+(dist*.007))%1;if(z>.15&&z<.9){let yy=yAt(z),ww=widthAt(z)*.62,cx=centerAt(z);rect(cx-ww/2,yy,ww,5+z*8,['#ef5350','#29b6f6','#ffee58','#66bb6a','#ab47bc'][k%5])}}}
+function crowd(){for(let s=-1;s<=1;s+=2){for(let i=0;i<70;i++){let z=((i/70)+(dist*.005))%1;if(z<.28)continue;let y=yAt(z)+5,x=s<0?roadL(z)-18-z*55:roadR(z)+18+z*55;rect(x,y,5+z*5,13+z*14,['#151515','#e65','#38f','#fd4','#fff'][i%5])}}}
+function obstaclesDraw(){[...obstacles].filter(o=>o.z>.02&&o.z<1.26).sort((a,b)=>a.z-b.z).forEach(o=>{let z=o.z,s=.75+z*3.9,x=laneX(o.nx,z),y=yAt(z);ctx.save();ctx.translate(x,y);ctx.scale(s,s);if(o.type==='ramp'){rect(-24,-10,48,10,'#2f8ec8');ctx.fillStyle='#185b8c';ctx.beginPath();ctx.moveTo(-32,0);ctx.lineTo(32,0);ctx.lineTo(32,-10);ctx.lineTo(-32,-34);ctx.fill();text('JUMP',-18,-16,8,'#fff')}else if(o.type==='stairs'){for(let k=0;k<6;k++)rect(-32+k*5,-k*6,64-k*9,6,'#c9c5bd')}else if(o.type==='barrel'){rect(-14,-32,28,32,o.hit?'#f33':'#c55a39');rect(-16,-35,32,5,'#252525');rect(-16,-18,32,5,'#252525')}else if(o.type==='rock'){rect(-18,-22,36,22,'#464646');rect(-8,-31,24,10,'#666')}else if(o.type==='gate'){rect(-44,-22,88,18,'#e55252');rect(-44,-28,88,6,'#fff');text('CURVA',-24,-36,9,'#ffd23a')}else{rect(-42,-8,84,18,'#141414');rect(-42,-14,84,6,'#ffce39');text('GAP',-14,-24,10,'#ffd23a')}ctx.restore()})}
+function pov(){let bob=Math.sin(frame*.25)*3+(onGround?0:airY*.08),cx=W/2+riderX*70,cy=620+bob;ctx.save();ctx.translate(cx,cy);ctx.rotate(vx*.55+curveAt(1)*.08+whip*.07);ctx.strokeStyle='#0b0b0d';ctx.lineWidth=22;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(-320,18);ctx.quadraticCurveTo(0,-28,320,18);ctx.stroke();ctx.strokeStyle='#4b4b4b';ctx.lineWidth=5;ctx.stroke();rect(-400,0,105,52,'#111');rect(295,0,105,52,'#111');rect(-95,18,190,85,'#15171a');rect(-32,-20,64,64,'#0b0b0d');rect(-18,-6,36,36,'#646464');ctx.strokeStyle='#c98b60';ctx.lineWidth=30;ctx.beginPath();ctx.moveTo(-300,20);ctx.lineTo(-435,110);ctx.moveTo(300,20);ctx.lineTo(435,110);ctx.stroke();ctx.restore();if(!onGround){text('AIR',W/2,122,34,'#ffd23a','center');if(rot)text('BACKFLIP',W/2,158,25,'#fff','center');if(Math.abs(whip)>.1)text('WHIP',W/2,190,25,'#fff','center')}}
+function particlesDraw(){particles.forEach(p=>rect(p.x,p.y,5,5,p.c))}
+function hudBox(x,y,w,h){ctx.fillStyle='rgba(10,10,12,.78)';ctx.fillRect(x,y,w,h);ctx.strokeStyle='#d79037';ctx.lineWidth=2;ctx.strokeRect(x,y,w,h)}
+function hud(){hudBox(30,28,220,90);text('TIEMPO',115,58,24,'#ffd23a','center');text('01:'+String(timeLeft).padStart(2,'0'),140,102,48,'#fff','center');hudBox(520,28,240,90);text('PUNTOS',640,58,24,'#ffd23a','center');text(String(score).padStart(5,'0'),640,104,46,'#fff','center');hudBox(1030,28,210,90);text('VIDAS',1135,58,24,'#ffd23a','center');text('♥'.repeat(lives),1135,104,44,'#ff3e3e','center');hudBox(1035,602,205,78);text('VELOCIDAD',1138,628,22,'#ffd23a','center');text(Math.floor(speed*25)+' KM/H',1138,668,34,'#fff','center');hudBox(30,602,220,78);text('STAGE',140,628,22,'#ffd23a','center');text(Math.floor(dist/900)+1+'/5',140,668,34,'#fff','center');if(combo>1){hudBox(530,130,220,55);text('COMBO '+combo+'X',640,166,30,'#ffd23a','center')}if(trickTimer>0){hudBox(35,160,250,95);text('TRUCO!',60,194,25,'#ffd23a');text(trick,60,233,31,'#fff')}}
+function overlay(t,s){ctx.fillStyle='rgba(0,0,0,.72)';ctx.fillRect(0,0,W,H);text(t,W/2,290,56,'#ffd23a','center');text(s,W/2,345,25,'#fff','center');text('VALPARAISO CERRO ABAJO · POV ARCADE V3',W/2,460,22,'#9ee7ff','center')}
+function render(){if(state==='play')update();else frame++;ctx.save();if(shake){ctx.translate(rnd(-shake,shake),rnd(-shake,shake));shake*=.83}sky();road();city();crowd();obstaclesDraw();pov();particlesDraw();hud();ctx.restore();if(state==='menu')overlay('TRAIL RIPPER','click / tecla para bajar el cerro');if(state==='over')overlay('GAME OVER','score '+score+' · record '+best+' · click para reintentar');requestAnimationFrame(render)}
 render();
 </script>
 </body>
