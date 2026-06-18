@@ -405,32 +405,75 @@ function trail(){
   cx.beginPath();cx.moveTo(tL(0),HY);cx.lineTo(tL(1),H);cx.stroke();
   cx.beginPath();cx.moveTo(tR(0),HY);cx.lineTo(tR(1),H);cx.stroke();
 }
-var HOUSE_COLORS=[
-  ['#b5603a','#6b3318'],['#5c8a7a','#2e4a3e'],['#c8923a','#6b4a14'],
-  ['#7a8a4a','#3a4a1f'],['#a8472a','#5a2414'],['#8a7a8a','#4a3a4a'],
-  ['#d8c8a0','#9a8868']
-];
-function house(x,y,s,seed){
-  var w=26*s,h=30*s,roofH=12*s;
-  var col=HOUSE_COLORS[seed%HOUSE_COLORS.length];
-  cx.fillStyle='rgba(0,0,0,.25)';cx.fillRect(x-w/2,y-2*s,w,3*s);
-  cx.fillStyle=col[0];cx.fillRect(x-w/2,y-h,w,h);
-  cx.fillStyle='rgba(0,0,0,.18)';cx.fillRect(x+w/2-w*.28,y-h,w*.28,h);
-  cx.fillStyle=col[1];
-  cx.beginPath();
-  cx.moveTo(x-w/2-3*s,y-h);cx.lineTo(x+w/2+3*s,y-h);cx.lineTo(x+w/2+3*s,y-h-roofH*.35);
-  cx.lineTo(x,y-h-roofH);cx.lineTo(x-w/2-3*s,y-h-roofH*.35);cx.closePath();cx.fill();
-  cx.fillStyle='rgba(255,225,140,.85)';
-  cx.fillRect(x-w*.28,y-h*.62,w*.18,h*.2);
-  cx.fillRect(x+w*.10,y-h*.62,w*.18,h*.2);
-  cx.fillStyle='rgba(40,25,20,.8)';
-  cx.fillRect(x-w*.10,y-h*.28,w*.2,h*.28);
+// ─── ELEMENTOS DE SENDERO DE BOSQUE — pinos, rocas, fauna ───────────
+function pineTree(x,y,s){
+  var h=128*s,w=42*s;
+  cx.fillStyle='rgba(0,0,0,.22)';cx.beginPath();cx.ellipse(x,y+2*s,w*.4,3*s,0,0,Math.PI*2);cx.fill();
+  // Tronco
+  cx.fillStyle='#4a3018';cx.fillRect(x-4*s,y-h*.26,8*s,h*.30);
+  // Copas — verde de bosque vívido, nítido (no apagado)
+  var cols=['#0f5c1f','#1f7a2c','#2f9438'];
+  for(var L=0;L<3;L++){
+    var ly=y-h*.18-L*h*.26,lw=w*(1-L*.20);
+    cx.fillStyle=cols[L];
+    cx.beginPath();
+    cx.moveTo(x,ly-h*.30);
+    cx.lineTo(x+lw/2,ly);cx.lineTo(x+lw*.18,ly);
+    cx.lineTo(x+lw*.4,ly+h*.06);
+    cx.lineTo(x-lw*.4,ly+h*.06);
+    cx.lineTo(x-lw*.18,ly);cx.lineTo(x-lw/2,ly);
+    cx.closePath();cx.fill();
+    // Highlight de luz lateral
+    cx.fillStyle='rgba(255,255,255,.10)';
+    cx.beginPath();cx.moveTo(x,ly-h*.30);cx.lineTo(x+lw*.12,ly);cx.lineTo(x,ly);cx.closePath();cx.fill();
+  }
 }
-function houses(){
-  for(var i=0;i<11;i++){
-    var z=((i/11)+tsc/52*.45)%1,s=sc(z),sy=wY(z);
-    house(tL(z)-18*s,sy,s,i);
-    house(tR(z)+18*s,sy,s,i+3);
+function trailRock(x,y,s){
+  var sc2=22*s;
+  cx.fillStyle='rgba(0,0,0,.25)';cx.beginPath();cx.ellipse(x,y+2*s,sc2*.95,4*s,0,0,Math.PI*2);cx.fill();
+  // Roca principal — gris cemento, nítido y con brillo
+  cx.fillStyle='#9a9a98';
+  cx.beginPath();
+  cx.moveTo(x-sc2,y);cx.lineTo(x-sc2*.85,y-sc2*.55);cx.lineTo(x-sc2*.25,y-sc2*.92);
+  cx.lineTo(x+sc2*.35,y-sc2*.78);cx.lineTo(x+sc2*.92,y-sc2*.2);cx.lineTo(x+sc2,y);
+  cx.closePath();cx.fill();
+  cx.fillStyle='#6e6e6c';
+  cx.beginPath();cx.moveTo(x+sc2*.1,y-sc2*.78);cx.lineTo(x+sc2*.92,y-sc2*.2);cx.lineTo(x+sc2,y);cx.lineTo(x+sc2*.2,y);cx.closePath();cx.fill();
+  cx.fillStyle='rgba(255,255,255,.35)';
+  cx.beginPath();cx.ellipse(x-sc2*.35,y-sc2*.62,sc2*.18,sc2*.1,-.4,0,Math.PI*2);cx.fill();
+  // Roca pequeña al lado
+  cx.fillStyle='#828280';
+  cx.beginPath();cx.ellipse(x+sc2*.85,y-sc2*.12,sc2*.32,sc2*.26,0,0,Math.PI*2);cx.fill();
+}
+function critter(x,y,s,kind){
+  cx.fillStyle='rgba(0,0,0,.2)';cx.beginPath();cx.ellipse(x,y+1*s,14*s,3*s,0,0,Math.PI*2);cx.fill();
+  if(kind===0){
+    // Pajarito sobre rama
+    cx.strokeStyle='#4a3018';cx.lineWidth=2*s;
+    cx.beginPath();cx.moveTo(x-14*s,y);cx.lineTo(x+14*s,y);cx.stroke();
+    cx.fillStyle='#2a2420';
+    cx.beginPath();cx.ellipse(x,y-8*s,7*s,5*s,0,0,Math.PI*2);cx.fill();
+    cx.beginPath();cx.arc(x+5*s,y-12*s,3.5*s,0,Math.PI*2);cx.fill();
+    cx.fillStyle='#c8932a';cx.beginPath();cx.moveTo(x+8*s,y-12*s);cx.lineTo(x+13*s,y-11*s);cx.lineTo(x+8*s,y-10*s);cx.closePath();cx.fill();
+  } else {
+    // Conejo de bosque, silueta simple
+    cx.fillStyle='#5a4030';
+    cx.beginPath();cx.ellipse(x,y-7*s,9*s,7*s,0,0,Math.PI*2);cx.fill();
+    cx.beginPath();cx.ellipse(x-7*s,y-13*s,4*s,8*s,-.3,0,Math.PI*2);cx.fill();
+    cx.beginPath();cx.ellipse(x-2*s,y-15*s,3.5*s,7*s,-.1,0,Math.PI*2);cx.fill();
+    cx.fillStyle='#3a2a1e';
+    cx.fillRect(x-5*s,y-1*s,3*s,3*s);cx.fillRect(x+3*s,y-1*s,3*s,3*s);
+  }
+}
+function roadside(){
+  var pattern=['pine','pine','rock','pine','critter','rock','pine','critter','pine'];
+  for(var i=0;i<9;i++){
+    var z=((i/9)+tsc/52*.45)%1,s=sc(z),sy=wY(z);
+    var t=pattern[i%pattern.length];
+    var lx=tL(z)-22*s, rx=tR(z)+22*s;
+    if(t==='pine'){pineTree(lx,sy,s);pineTree(rx,sy,s*.92);}
+    else if(t==='rock'){trailRock(lx,sy,s);trailRock(rx,sy,s*.9);}
+    else {critter(lx,sy,s,i%2);critter(rx,sy,s*.9,(i+1)%2);}
   }
 }
 
@@ -680,7 +723,7 @@ function loop(){
     cx.save();
     cx.setTransform(OW/W,0,0,OH/H,0,0);
     cx.clearRect(0,0,W,H);
-    sky();mountains();trail();houses();groundShadow();obstacles();
+    sky();mountains();trail();roadside();groundShadow();obstacles();
     drawHandlebars();
     cx.restore();
 
