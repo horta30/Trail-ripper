@@ -84,16 +84,24 @@ function sndCrash(){noise(.35,.5);tone(180,.4,.12,'sawtooth',60);}
 function sndScore(){tone(880,.08,.07,'sine',1100);}
 function sndTrick(){tone(660,.07,.1,'square',990);setTimeout(function(){tone(990,.12,.1,'square',1320);},70);}
 function sndTurbo(){tone(120,.5,.18,'sawtooth',680);}
-// Sonido de escalera — tick rápido tipo golpe de llanta en peldaño
+// Sonido de baraja / páginas de libro — riffle continuo mientras se bajan escaleras
 function sndStairTick(){
   if(!AC)return;
-  var buf=AC.createBuffer(1,AC.sampleRate*.025,AC.sampleRate);
+  // Un "flap" individual: click corto de alta frecuencia, como una carta que pasa
+  var dur=Math.round(AC.sampleRate*.013);
+  var buf=AC.createBuffer(1,dur,AC.sampleRate);
   var d=buf.getChannelData(0);
-  for(var i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*(1-i/d.length)*(.6+Math.sin(i*.8)*.4);
-  var s=AC.createBufferSource(),g=AC.createGain(),f=AC.createBiquadFilter();
-  f.type='bandpass';f.frequency.value=220;f.Q.value=1.2;
-  s.buffer=buf;s.connect(f);f.connect(g);g.connect(AC.destination);
-  g.gain.value=.28;s.start();
+  for(var i=0;i<dur;i++){
+    var t2=i/dur;
+    // Mezcla de click tonal + ruido blanco = sonido de papel/cartón
+    var click=Math.sin(i*1100/AC.sampleRate*Math.PI*2)*.55;
+    var noise=(Math.random()*2-1)*.45;
+    d[i]=(click+noise)*(1-t2)*(1-t2); // decay cuadrático rápido
+  }
+  var src=AC.createBufferSource(),g=AC.createGain(),f=AC.createBiquadFilter();
+  f.type='highpass';f.frequency.value=900; // saca graves, queda el "snap" de papel
+  src.buffer=buf;src.connect(f);f.connect(g);g.connect(AC.destination);
+  g.gain.value=.32;src.start();
 }
 
 // ─── AUDIO — CHIPTUNE LOOP ──────────────────────────────────────────
@@ -190,7 +198,7 @@ var turbo=0, turboActive=0, turboFlashT=0;
 var flipAngle=0, flipDir=0, flipDone=false;
 var wheelieTime=0, wheelieLean=0;
 // Escaleras
-var stairActive=false, stairSndT=0, stairBonus=0, stairSpawn=0;
+var stairActive=false, stairSndT=0, stairBonus=0, stairSpawn=0, stairCount=0;
 
 // ─── CONTROLS ──────────────────────────────────────────────────────
 document.addEventListener('keydown',function(e){
@@ -230,7 +238,7 @@ function go(){
   obs=[];spc=0;tsc=0;lastScore=0;
   whipFlag=false;rampFlag=false;trick=null;turbo=0;turboActive=0;turboFlashT=0;
   flipAngle=0;flipDir=0;flipDone=false;wheelieTime=0;wheelieLean=0;
-  stairActive=false;stairSndT=0;stairBonus=0;stairSpawn=180;
+  stairActive=false;stairSndT=0;stairBonus=0;stairSpawn=180;stairCount=0;
   startMusic();
 }
 function jump(p){
@@ -331,10 +339,13 @@ function update(){
     obs.push({t:t,nx:nx,z:0,hit:false,used:false});
     spc=Math.max(22,58-dist*.015)+(Math.random()*28|0);
   }
-  // Escaleras — spawn periódico independiente
+  // Escaleras — spawn periódico con largos alternados: 1x / 2x / 4x
   if(--stairSpawn<=0){
-    obs.push({t:'stairs',nx:0,z:0,hit:false,used:false,zLen:0.14});
-    stairSpawn=220+(Math.random()*120|0);
+    var cycle=stairCount%3;
+    var zL=cycle===0?0.14:cycle===1?0.28:0.56; // normal / doble / cuádruple
+    obs.push({t:'stairs',nx:0,z:0,hit:false,used:false,zLen:zL});
+    stairCount++;
+    stairSpawn=190+(Math.random()*100|0);
   }
 
   var dz=speed*.011;
@@ -348,7 +359,9 @@ function update(){
         stairActive=true;
         stairBonus+=4;
         points+=4;
-        if(--stairSndT<=0){sndStairTick();stairSndT=4;}
+        // Intervalo entre flaps depende de la velocidad — riffle más rápido = más rápido
+        var flapInterval=Math.max(2,Math.round(6-speed*.8));
+        if(--stairSndT<=0){sndStairTick();stairSndT=flapInterval;}
         turbo=Math.min(100,turbo+.12);
       }
       if(o.z>1.3)obs.splice(i,1);
@@ -628,9 +641,11 @@ function obstacles(){
       var midX=(tL(so.z)+tR(so.z))/2;
       var midY=wY(so.z)-6;
       var alpha=Math.min(1,(0.72-so.z)*6);
+      var sizeLabel=so.zLen>=0.5?'▼ ESCALERA x4 ▼':so.zLen>=0.25?'▼ ESCALERA x2 ▼':'▼ ESCALERAS ▼';
       cx.globalAlpha=alpha;
-      cx.fillStyle='#f0c840';cx.font='bold 11px Impact,Arial,sans-serif';cx.textAlign='center';
-      cx.fillText('▼ ESCALERAS ▼',midX,midY);
+      cx.fillStyle=so.zLen>=0.5?'#ff8822':so.zLen>=0.25?'#f0c840':'#d8d840';
+      cx.font='bold 11px Impact,Arial,sans-serif';cx.textAlign='center';
+      cx.fillText(sizeLabel,midX,midY);
       cx.globalAlpha=1;
     }
     // Vibración visual cuando rider está en escaleras
