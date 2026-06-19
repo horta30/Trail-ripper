@@ -203,7 +203,7 @@ var stairActive=false, stairSndT=0, stairBonus=0, stairSpawn=0, stairCount=0;
 // ─── CONTROLS ──────────────────────────────────────────────────────
 document.addEventListener('keydown',function(e){
   keys[e.code]=true;
-  if(['Space','ArrowUp','ArrowLeft','ArrowRight'].indexOf(e.code)>=0)e.preventDefault();
+  if(['Space','ArrowUp','ArrowLeft','ArrowRight','ArrowDown'].indexOf(e.code)>=0)e.preventDefault();
   if(phase!=='playing'){initAC();go();}
 });
 document.addEventListener('keyup',function(e){keys[e.code]=false;});
@@ -263,32 +263,35 @@ function update(){
   if((keys['Space']||tJump)&&rGnd)jump();
   tJump=false;
 
-  // Frontflip: UP en el aire
-  if(keys['ArrowUp']&&rGnd)jump();
-  if(keys['ArrowUp']&&!rGnd&&flipDir===0){flipDir=1;}
-  // Backflip / Wheelie: DOWN
+  // ── SALTO ──────────────────────────────────────────────────────────
+  if((keys['Space']||keys['ArrowUp'])&&rGnd)jump();
+
+  // ── WHEELIE (↓ en tierra) ─────────────────────────────────────────
   if(keys['ArrowDown']&&rGnd){
     wheelieTime++;
-    wheelieLean=Math.min(0.45, wheelieTime*0.018);
+    wheelieLean=Math.min(0.42, wheelieTime*0.016);
   } else {
-    if(wheelieTime>30&&wheelieLean>0.1&&rGnd){
+    if(wheelieTime>28&&wheelieLean>0.08&&rGnd){
       var wt=Math.round(wheelieTime/6);
       trick={label:'WHEELIE',pts:wt*5,timer:70};
       points+=wt*5;turbo=Math.min(100,turbo+10);sndTrick();
     }
-    wheelieTime=0; wheelieLean*=0.82;
+    wheelieTime=0; wheelieLean*=0.80;
   }
-  if(keys['ArrowDown']&&!rGnd&&flipDir===0){flipDir=-1;}
 
-  // Ejecutar flip en el aire
-  if(!rGnd&&flipDir!==0){
-    flipAngle+=flipDir*0.13;
-    if(!flipDone&&Math.abs(flipAngle)>=Math.PI*2){
-      flipDone=true;
-      var flipLabel=flipDir>0?'FRONTFLIP':'BACKFLIP';
-      var flipBonus=flipDir>0?350:400;
-      trick={label:flipLabel,pts:flipBonus,timer:80};
-      points+=flipBonus;turbo=Math.min(100,turbo+30);sndTrick();
+  // ── FLIPS (solo en el aire, una vez iniciado no cambia de dirección) ─
+  if(!rGnd){
+    // Iniciar flip en el primer frame de aire con tecla presionada
+    if(flipDir===0){
+      if(keys['ArrowUp'])  flipDir=1;   // frontflip: hacia adelante (cabeza va primero)
+      if(keys['ArrowDown'])flipDir=-1;  // backflip: hacia atrás (nuca va primero)
+    }
+    // Girar a velocidad constante mientras hay dirección
+    if(flipDir!==0){
+      // Velocidad: ~0.11 rad/frame → 360° en ~57 frames (~1.5s) — tiempo justo para rampas
+      flipAngle+=flipDir*0.11;
+      // Clamp al doble de vuelta para no acumular infinito
+      flipAngle=Math.max(-Math.PI*4,Math.min(Math.PI*4,flipAngle));
     }
   }
 
@@ -303,23 +306,51 @@ function update(){
     if(rJ>=0){
       rJ=0;rJV=0;rGnd=true;
       sndLand();
-      // Reset flip
-      var landed=flipDone;
-      if(!landed&&Math.abs(flipAngle)>0.5){
-        // aterrizó a mitad de flip — crash
-        if(inv<=0){lives--;sndCrash();crash=true;cT=40;inv=110;rJV=-9;rGnd=false;
-          if(lives<=0)setTimeout(function(){if(score>best)best=score;phase='gameover';stopMusic();},800);}
+
+      // ── Evaluar flip al aterrizar ───────────────────────────────────
+      if(Math.abs(flipAngle)>0.25){
+        // Normalizar ángulo a [0, 2π)
+        var TWO_PI=Math.PI*2;
+        var norm=((flipAngle%TWO_PI)+TWO_PI)%TWO_PI;
+        // Zona "de pie": 0–55° o 305–360° (cos>0.57, rider visible normal)
+        // Zona "de cabeza": 90°–270° (rider invertido) → CRASH
+        var DEG=Math.PI/180;
+        var upsideDown=(norm>70*DEG&&norm<290*DEG);
+        var fullRotation=Math.abs(flipAngle)>=TWO_PI*.92; // ~92% de vuelta = OK
+
+        if(upsideDown&&!fullRotation&&inv<=0){
+          // ¡Cayó de cabeza! — crash con animación dramática
+          crash=true;cT=50;inv=130;rJV=-11;rGnd=false;
+          lives--;sndCrash();
+          // Truco fallido
+          trick={label:'¡CAÍDA DE CABEZA!',pts:0,timer:90};
+          if(lives<=0)setTimeout(function(){if(score>best)best=score;phase='gameover';stopMusic();},900);
+        } else if(fullRotation){
+          // Aterrizaje limpio — calcular bonus según tipo y rotaciones
+          var numRots=Math.floor(Math.abs(flipAngle)/TWO_PI);
+          var flipLabel=flipDir>0?'FRONTFLIP':'BACKFLIP';
+          if(numRots>=2)flipLabel='DOBLE '+flipLabel;
+          var flipBonus=(flipDir>0?320:400)*numRots;
+          trick={label:flipLabel,pts:flipBonus,timer:85};
+          points+=flipBonus;turbo=Math.min(100,turbo+32);
+          sndTrick();
+          flipDone=true;
+        }
+        // Si no era suficiente ángulo (menor de 90°) → aterrizó antes de voltear → OK sin truco
       }
+
+      // Reset estado de flip
       flipAngle=0;flipDir=0;flipDone=false;
+
+      // Whip / ramp bonus (solo si no fue un flip)
       var label=null,bonus=0;
-      if(whipFlag&&rampFlag){label='WHIP+AIR';bonus=300;}
-      else if(rampFlag){label='BIG AIR';bonus=150;}
-      else if(whipFlag){label='WHIP';bonus=250;}
-      if(label&&!landed){
+      if(whipFlag&&rampFlag){label='WHIP+AIR';bonus=280;}
+      else if(rampFlag){label='BIG AIR';bonus=140;}
+      else if(whipFlag){label='WHIP';bonus=230;}
+      if(label&&!flipDone){
         points+=bonus;
-        turbo=Math.min(100,turbo+(rampFlag?12:20));
-        trick={label:label,pts:bonus,timer:75};
-        sndTrick();
+        turbo=Math.min(100,turbo+(rampFlag?12:18));
+        if(!trick){trick={label:label,pts:bonus,timer:70};sndTrick();}
       }
       whipFlag=false;rampFlag=false;
     }
@@ -713,8 +744,17 @@ function drawRider(){
   // Lean lateral con el giro
   cx.rotate(rVX*14*Math.PI/180);
 
-  // Flip (frontflip / backflip)
-  if(Math.abs(flipAngle)>0.01) cx.rotate(-flipAngle);
+  // ── FLIP — rotación en plano sagital (entra/sale de pantalla) ──────
+  // cosF = 1 → normal | cosF = 0 → horizontal (mitad del giro) | cosF = -1 → invertido
+  var cosF=1, sinF=0, perspF=1;
+  if(Math.abs(flipAngle)>0.01){
+    cosF=Math.cos(flipAngle);
+    sinF=Math.sin(Math.abs(flipAngle)); // siempre positivo, para perspectiva
+    // Frontflip (dir>0): rider se aleja → encoge en el pico del arco
+    // Backflip  (dir<0): rider se acerca → crece en el pico del arco
+    perspF = flipDir>0 ? (1-sinF*.28) : (1+sinF*.32);
+    cx.scale(perspF, cosF*perspF); // squash sagital + perspectiva
+  }
 
   // Wheelie: inclinar hacia atrás
   if(wheelieLean>0.02) cx.rotate(wheelieLean);
@@ -895,8 +935,27 @@ function drawRider(){
   cx.fillStyle='rgba(0,0,0,.5)';
   cx.fillRect(-5,HC-16,3,4);cx.fillRect(-1,HC-17,3,4);cx.fillRect(3,HC-16,3,4);
 
+  // Tinte rojo "peligro" cuando está invertido (cosF < -0.2)
+  if(cosF<-0.2){
+    cx.fillStyle='rgba(255,30,30,'+Math.min(.45,(-cosF-.2)*.55)+')';
+    cx.fillRect(-35,-55,70,85);
+  }
 
   cx.restore();
+
+  // Indicador de flip en HUD (arco de progreso) — dibujado en mctx (capa nítida)
+  if(Math.abs(flipAngle)>0.08&&!rGnd){
+    var prog=Math.abs(flipAngle)/(Math.PI*2);
+    var fc=cosF>0?'#4ab840':(cosF>-0.35?'#f0c840':'#ff3322');
+    var ix=W-18,iy=60,ir=14;
+    mctx.beginPath();mctx.arc(ix,iy,ir,0,Math.PI*2);
+    mctx.fillStyle='rgba(0,0,0,.45)';mctx.fill();
+    mctx.beginPath();mctx.moveTo(ix,iy);
+    mctx.arc(ix,iy,ir,-Math.PI/2,-Math.PI/2+prog*Math.PI*2);
+    mctx.closePath();mctx.fillStyle=fc;mctx.fill();
+    mctx.textAlign='center';mctx.font='bold 8px Arial';mctx.fillStyle='#fff';
+    mctx.fillText(flipDir>0?'FF':'BF',ix,iy+3);
+  }
 }
 
 
