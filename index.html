@@ -84,6 +84,17 @@ function sndCrash(){noise(.35,.5);tone(180,.4,.12,'sawtooth',60);}
 function sndScore(){tone(880,.08,.07,'sine',1100);}
 function sndTrick(){tone(660,.07,.1,'square',990);setTimeout(function(){tone(990,.12,.1,'square',1320);},70);}
 function sndTurbo(){tone(120,.5,.18,'sawtooth',680);}
+// Sonido de escalera — tick rápido tipo golpe de llanta en peldaño
+function sndStairTick(){
+  if(!AC)return;
+  var buf=AC.createBuffer(1,AC.sampleRate*.025,AC.sampleRate);
+  var d=buf.getChannelData(0);
+  for(var i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*(1-i/d.length)*(.6+Math.sin(i*.8)*.4);
+  var s=AC.createBufferSource(),g=AC.createGain(),f=AC.createBiquadFilter();
+  f.type='bandpass';f.frequency.value=220;f.Q.value=1.2;
+  s.buffer=buf;s.connect(f);f.connect(g);g.connect(AC.destination);
+  g.gain.value=.28;s.start();
+}
 
 // ─── AUDIO — CHIPTUNE LOOP ──────────────────────────────────────────
 var musicOn=false, musicStep=0, musicNextTime=0;
@@ -178,6 +189,8 @@ var turbo=0, turboActive=0, turboFlashT=0;
 // Rider animation state
 var flipAngle=0, flipDir=0, flipDone=false;
 var wheelieTime=0, wheelieLean=0;
+// Escaleras
+var stairActive=false, stairSndT=0, stairBonus=0, stairSpawn=0;
 
 // ─── CONTROLS ──────────────────────────────────────────────────────
 document.addEventListener('keydown',function(e){
@@ -217,6 +230,7 @@ function go(){
   obs=[];spc=0;tsc=0;lastScore=0;
   whipFlag=false;rampFlag=false;trick=null;turbo=0;turboActive=0;turboFlashT=0;
   flipAngle=0;flipDir=0;flipDone=false;wheelieTime=0;wheelieLean=0;
+  stairActive=false;stairSndT=0;stairBonus=0;stairSpawn=180;
   startMusic();
 }
 function jump(p){
@@ -317,10 +331,29 @@ function update(){
     obs.push({t:t,nx:nx,z:0,hit:false,used:false});
     spc=Math.max(22,58-dist*.015)+(Math.random()*28|0);
   }
+  // Escaleras — spawn periódico independiente
+  if(--stairSpawn<=0){
+    obs.push({t:'stairs',nx:0,z:0,hit:false,used:false,zLen:0.14});
+    stairSpawn=220+(Math.random()*120|0);
+  }
 
   var dz=speed*.011;
+  var wasOnStairs=stairActive;
+  stairActive=false;
   for(var i=obs.length-1;i>=0;i--){
     var o=obs[i];o.z+=dz;
+    // Escaleras: zona de bonificación, sin crash
+    if(o.t==='stairs'){
+      if(o.z>0.68&&o.z<0.68+o.zLen+0.18){
+        stairActive=true;
+        stairBonus+=4;
+        points+=4;
+        if(--stairSndT<=0){sndStairTick();stairSndT=4;}
+        turbo=Math.min(100,turbo+.12);
+      }
+      if(o.z>1.3)obs.splice(i,1);
+      continue;
+    }
     if(o.t==='ramp'&&!o.used&&o.z>.90&&o.z<1.06&&Math.abs(rNX-o.nx)<.22&&rGnd){o.used=true;jump(18);}
     if(!o.hit&&o.t!=='ramp'&&inv<=0&&o.z>.87&&o.z<1.06){
       var dx=Math.abs(rNX-o.nx),hw=o.t==='pole'?.17:.14;
@@ -334,6 +367,13 @@ function update(){
     }
     if(o.z>1.25)obs.splice(i,1);
   }
+  // Salió de las escaleras → mostrar bonus
+  if(wasOnStairs&&!stairActive&&stairBonus>0){
+    trick={label:'ESCALERA',pts:stairBonus,timer:80};
+    sndTrick();
+    stairBonus=0;
+  }
+  if(!stairActive)stairBonus=0;
   if(inv>0)inv--;
   if(crash&&--cT<=0)crash=false;
 }
@@ -561,7 +601,47 @@ function groundShadow(){
   }
 }
 function obstacles(){
-  var sorted=obs.slice().sort(function(a,b){return a.z-b.z;});
+  // ── Escaleras primero (se dibujan en coordenadas de mundo, no con translate/scale) ──
+  for(var si=0;si<obs.length;si++){
+    var so=obs[si];
+    if(so.t!=='stairs'||so.z<0.05)continue;
+    var numSteps=12;
+    var zLen=so.zLen||0.14;
+    for(var st=0;st<numSteps;st++){
+      var za=so.z+st*(zLen/numSteps);
+      var zb=so.z+(st+1)*(zLen/numSteps);
+      if(za>1.15||zb<0.04)continue;
+      za=Math.max(0.04,za); zb=Math.min(1.15,zb);
+      var x1=tL(za),x2=tR(za),x3=tL(zb),x4=tR(zb);
+      var y1=wY(za),y2=wY(zb);
+      // Peldaño (tread) — color concreto alternado
+      var lightStep=st%2===0;
+      cx.fillStyle=lightStep?'#c8c8d0':'#9898a8';
+      cx.beginPath();cx.moveTo(x1,y1);cx.lineTo(x2,y1);cx.lineTo(x4,y2);cx.lineTo(x3,y2);cx.closePath();cx.fill();
+      // Borde del escalón (arista del peldaño) — línea blanca brillante
+      cx.strokeStyle=lightStep?'rgba(255,255,255,.8)':'rgba(200,200,220,.4)';
+      cx.lineWidth=lightStep?2.5:1;
+      cx.beginPath();cx.moveTo(x1,y1);cx.lineTo(x2,y1);cx.stroke();
+    }
+    // Indicador de entrada a escaleras (texto solo cuando se aproxima)
+    if(so.z>0.4&&so.z<0.72){
+      var midX=(tL(so.z)+tR(so.z))/2;
+      var midY=wY(so.z)-6;
+      var alpha=Math.min(1,(0.72-so.z)*6);
+      cx.globalAlpha=alpha;
+      cx.fillStyle='#f0c840';cx.font='bold 11px Impact,Arial,sans-serif';cx.textAlign='center';
+      cx.fillText('▼ ESCALERAS ▼',midX,midY);
+      cx.globalAlpha=1;
+    }
+    // Vibración visual cuando rider está en escaleras
+    if(stairActive&&so.z>0.68){
+      var shimX=tL(0.85),shimY=wY(0.85);
+      cx.fillStyle='rgba(248,240,180,'+(.06+Math.sin(fn*.8)*.04)+')';
+      cx.fillRect(tL(0.7),wY(0.7),tR(0.7)-tL(0.7),wY(1.0)-wY(0.7));
+    }
+  }
+
+  var sorted=obs.filter(function(o){return o.t!=='stairs';}).sort(function(a,b){return a.z-b.z;});
   for(var i=0;i<sorted.length;i++){
     var o=sorted[i];if(o.z<.04)continue;
     var s=sc(o.z),sx=wX(o.nx,o.z),sy=wY(o.z);
@@ -891,6 +971,15 @@ function hud(){
     mctx.globalAlpha=Math.min(1,turboFlashT/20);
     mctx.textAlign='center';mctx.font='bold 42px Impact,Arial Black,sans-serif';
     strokeText(mctx,'¡TURBO!',W/2,H/2-30,'#f0a020','rgba(0,0,0,.5)',6);
+    mctx.globalAlpha=1;mctx.textAlign='left';
+  }
+  // Indicador de escaleras activo
+  if(stairActive){
+    mctx.globalAlpha=.75+Math.sin(fn*.35)*.25;
+    mctx.textAlign='center';
+    woodPanel(mctx,W/2-100,H-44,200,30,8);
+    mctx.font='bold 13px Impact,Arial Black,sans-serif';
+    strokeText(mctx,'⚡ ESCALERA +'+stairBonus,W/2,H-24,'#f0c840','rgba(0,0,0,.6)',3);
     mctx.globalAlpha=1;mctx.textAlign='left';
   }
 }
