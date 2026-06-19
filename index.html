@@ -18,7 +18,7 @@ canvas{
   top:max(14px,env(safe-area-inset-top));
   right:max(14px,env(safe-area-inset-right));
   z-index:50;width:44px;height:44px;border-radius:50%;
-  background:rgba(38,26,16,.78);border:2px solid rgba(138,154,74,.6);color:#fff;
+  background:rgba(38,26,16,.78);border:2px solid rgba(74,184,64,.7);color:#fff;
   font-size:19px;display:flex;align-items:center;justify-content:center;cursor:pointer;
   user-select:none;-webkit-user-select:none;touch-action:manipulation;
   box-shadow:0 2px 10px rgba(0,0,0,.4);
@@ -45,11 +45,10 @@ canvas{
 var cv=document.getElementById('c'),mctx=cv.getContext('2d');
 mctx.imageSmoothingEnabled=true;
 
-// ─── Mundo en pixel-art (baja res) + HUD nítido (alta res) ──────────
-var PIXEL_SCALE=0.62;
-var OW=Math.round(800*PIXEL_SCALE), OH=Math.round(450*PIXEL_SCALE);
+// ─── Full resolution — nítido, sin downscale ────────────────────────
+var OW=800, OH=450;
 var oc=document.createElement('canvas'); oc.width=OW; oc.height=OH;
-var cx=oc.getContext('2d'); cx.imageSmoothingEnabled=false;
+var cx=oc.getContext('2d'); cx.imageSmoothingEnabled=true;
 
 var W=800,H=450,HY=H*.34,RY=H*.70;
 var CAMX=W/2;
@@ -345,36 +344,61 @@ function strokeText(c,txt,x,y,fill,strokeCol,lw){
 
 // ─── ESCENA (pixel-art, baja resolución) ───────────────────────────
 function sky(){
+  // Cielo brillante tipo Sled Surfers
   var g=cx.createLinearGradient(0,0,0,HY+30);
-  g.addColorStop(0,'#251a12');g.addColorStop(.30,'#5a3a2a');
-  g.addColorStop(.55,'#a8623a');g.addColorStop(.78,'#c8923f');g.addColorStop(1,'#3a4a3a');
+  g.addColorStop(0,'#5ab8e8');
+  g.addColorStop(.55,'#8ed4f0');
+  g.addColorStop(.85,'#c8ecf8');
+  g.addColorStop(1,'#d4f0e8');
   cx.fillStyle=g;cx.fillRect(0,0,W,HY+30);
-  cx.fillStyle='rgba(255,224,150,.9)';
-  cx.beginPath();cx.arc(W*.74,HY*.52,24,0,Math.PI*2);cx.fill();
-  cx.fillStyle='#2e4a44';cx.fillRect(0,HY-6,W,10);
-  cx.strokeStyle='rgba(255,220,180,.35)';cx.lineWidth=1;
-  for(var wv=0;wv<W;wv+=26){cx.beginPath();cx.moveTo(wv,HY-2);cx.lineTo(wv+14,HY-2);cx.stroke();}
+  // Sol brillante
+  var sg=cx.createRadialGradient(W*.72,HY*.38,0,W*.72,HY*.38,38);
+  sg.addColorStop(0,'#fff7aa');sg.addColorStop(.5,'#ffe066');sg.addColorStop(1,'rgba(255,200,0,0)');
+  cx.fillStyle=sg;cx.beginPath();cx.arc(W*.72,HY*.38,38,0,Math.PI*2);cx.fill();
+  // Nubes simples
+  [W*.18,W*.45,W*.82].forEach(function(cx2,i){
+    var cy2=HY*.22+i*12;var wr=[55,42,50][i];
+    cx.fillStyle='rgba(255,255,255,.85)';
+    cx.beginPath();cx.ellipse(cx2,cy2,wr,18,0,0,Math.PI*2);cx.fill();
+    cx.beginPath();cx.ellipse(cx2-22,cy2+6,28,14,0,0,Math.PI*2);cx.fill();
+    cx.beginPath();cx.ellipse(cx2+20,cy2+8,24,12,0,0,Math.PI*2);cx.fill();
+  });
+  // Franja de horizonte
+  cx.fillStyle='#b8dfc8';cx.fillRect(0,HY-4,W,8);
 }
 function mountains(){
-  cx.beginPath();cx.moveTo(0,HY+12);
+  // Bosque del horizonte — verde vivo con brillo
+  cx.beginPath();cx.moveTo(0,HY+10);
   for(var i=0;i<hills.length;i++)cx.lineTo(i*18,hills[i]);
-  cx.lineTo(W,HY+12);cx.closePath();cx.fillStyle='#2e2418';cx.fill();
-  cx.beginPath();cx.moveTo(0,HY+12);
-  for(var i=0;i<hills.length;i++)cx.lineTo(i*18,hills[i]+20+Math.sin(i*.4)*8);
-  cx.lineTo(W,HY+12);cx.closePath();cx.fillStyle='#1f1810';cx.fill();
-  for(var k=0;k<40;k++){
-    var hx=(k*97+tsc*3)%W, hi=Math.floor(hx/18)%hills.length;
-    var hyv=hills[hi]+14+((k*53)%18);
-    cx.fillStyle=k%5===0?'rgba(255,210,120,.8)':'rgba(255,180,100,.5)';
-    cx.fillRect(hx,hyv,2,2);
+  cx.lineTo(W,HY+10);cx.closePath();cx.fillStyle='#2a7a3a';cx.fill();
+  // Segunda capa más oscura para profundidad
+  cx.beginPath();cx.moveTo(0,HY+10);
+  for(var i=0;i<hills.length;i++)cx.lineTo(i*18,hills[i]+22+Math.sin(i*.4)*8);
+  cx.lineTo(W,HY+10);cx.closePath();cx.fillStyle='#1e5e2a';cx.fill();
+  // Silueta de pinos en el horizonte
+  for(var k=0;k<28;k++){
+    var hx=(k*51+tsc)%W, hi2=Math.floor(hx/18)%hills.length;
+    var hy2=hills[Math.min(hi2,hills.length-1)];
+    var hs=4+((k*7)%6);
+    cx.fillStyle=k%3===0?'#1a4a22':'#1e6030';
+    cx.beginPath();cx.moveTo(hx,hy2-hs*5);cx.lineTo(hx+hs*2,hy2);cx.lineTo(hx-hs*2,hy2);cx.closePath();cx.fill();
   }
 }
 function trail(){
-  cx.fillStyle='#1f1812';cx.fillRect(0,HY,W,H-HY);
+  // Prado lateral verde vivo
+  cx.fillStyle='#4aaa5a';cx.fillRect(0,HY,W,H-HY);
+  // Sombra bajo pista
+  var sg2=cx.createLinearGradient(0,HY,0,HY+40);
+  sg2.addColorStop(0,'rgba(0,0,0,.18)');sg2.addColorStop(1,'rgba(0,0,0,0)');
+  cx.fillStyle=sg2;cx.fillRect(0,HY,W,40);
+  // Superficie de pista — gris piedra limpio y brillante
   cx.beginPath();cx.moveTo(tL(0),HY);cx.lineTo(tR(0),HY);cx.lineTo(tR(1),H);cx.lineTo(tL(1),H);cx.closePath();
   var tg=cx.createLinearGradient(0,HY,0,H);
-  tg.addColorStop(0,'#6b6358');tg.addColorStop(.5,'#7a7268');tg.addColorStop(1,'#8a8276');
+  tg.addColorStop(0,'#b8b8c0');tg.addColorStop(.4,'#c8c8cc');tg.addColorStop(1,'#d4d4d8');
   cx.fillStyle=tg;cx.fill();
+  // Brillo central
+  cx.beginPath();cx.moveTo(wX(-.12,0),HY);cx.lineTo(wX(.12,0),HY);cx.lineTo(wX(.25,1),H);cx.lineTo(wX(-.25,1),H);cx.closePath();
+  cx.fillStyle='rgba(255,255,255,.18)';cx.fill();
   for(var i=0;i<14;i++){
     var z0=(i+tsc/52)/14,z1=(i+1+tsc/52)/14;
     if(z0>1||z1<0)continue;
@@ -384,7 +408,7 @@ function trail(){
     cx.lineTo(wX(1,Math.min(z1,1)),wY(Math.min(z1,1)));
     cx.lineTo(wX(-1,Math.min(z1,1)),wY(Math.min(z1,1)));
     cx.closePath();
-    cx.strokeStyle='rgba(35,28,38,'+(.35+zc*.25)+')';
+    cx.strokeStyle='rgba(180,180,188,'+(.25+zc*.2)+')';
     cx.lineWidth=Math.max(1,2.5*sc(zc));cx.stroke();
   }
   for(var c=-3;c<=3;c++){
@@ -399,20 +423,20 @@ function trail(){
     cx.moveTo(wX(-.04,dz0),wY(dz0));cx.lineTo(wX(.04,dz0),wY(dz0));
     cx.lineTo(wX(.04,Math.min(dz1,1)),wY(Math.min(dz1,1)));
     cx.lineTo(wX(-.04,Math.min(dz1,1)),wY(Math.min(dz1,1)));
-    cx.closePath();cx.fillStyle='rgba(255,210,90,.55)';cx.fill();
+    cx.closePath();cx.fillStyle='rgba(255,255,255,.65)';cx.fill();
   }
-  cx.strokeStyle='#3a2e22';cx.lineWidth=2;
+  cx.strokeStyle='rgba(100,110,108,.5)';cx.lineWidth=2;
   cx.beginPath();cx.moveTo(tL(0),HY);cx.lineTo(tL(1),H);cx.stroke();
   cx.beginPath();cx.moveTo(tR(0),HY);cx.lineTo(tR(1),H);cx.stroke();
 }
 // ─── ELEMENTOS DE SENDERO DE BOSQUE — pinos, rocas, fauna ───────────
 function pineTree(x,y,s){
-  var h=128*s,w=42*s;
+  var h=160*s,w=52*s;
   cx.fillStyle='rgba(0,0,0,.22)';cx.beginPath();cx.ellipse(x,y+2*s,w*.4,3*s,0,0,Math.PI*2);cx.fill();
   // Tronco
   cx.fillStyle='#4a3018';cx.fillRect(x-4*s,y-h*.26,8*s,h*.30);
   // Copas — verde de bosque vívido, nítido (no apagado)
-  var cols=['#0f5c1f','#1f7a2c','#2f9438'];
+  var cols=['#1a8a2e','#2aaa3e','#3acc4e'];
   for(var L=0;L<3;L++){
     var ly=y-h*.18-L*h*.26,lw=w*(1-L*.20);
     cx.fillStyle=cols[L];
@@ -432,12 +456,12 @@ function trailRock(x,y,s){
   var sc2=22*s;
   cx.fillStyle='rgba(0,0,0,.25)';cx.beginPath();cx.ellipse(x,y+2*s,sc2*.95,4*s,0,0,Math.PI*2);cx.fill();
   // Roca principal — gris cemento, nítido y con brillo
-  cx.fillStyle='#9a9a98';
+  cx.fillStyle='#a8a8b0';
   cx.beginPath();
   cx.moveTo(x-sc2,y);cx.lineTo(x-sc2*.85,y-sc2*.55);cx.lineTo(x-sc2*.25,y-sc2*.92);
   cx.lineTo(x+sc2*.35,y-sc2*.78);cx.lineTo(x+sc2*.92,y-sc2*.2);cx.lineTo(x+sc2,y);
   cx.closePath();cx.fill();
-  cx.fillStyle='#6e6e6c';
+  cx.fillStyle='#7a7a82';
   cx.beginPath();cx.moveTo(x+sc2*.1,y-sc2*.78);cx.lineTo(x+sc2*.92,y-sc2*.2);cx.lineTo(x+sc2,y);cx.lineTo(x+sc2*.2,y);cx.closePath();cx.fill();
   cx.fillStyle='rgba(255,255,255,.35)';
   cx.beginPath();cx.ellipse(x-sc2*.35,y-sc2*.62,sc2*.18,sc2*.1,-.4,0,Math.PI*2);cx.fill();
@@ -454,7 +478,7 @@ function critter(x,y,s,kind){
     cx.fillStyle='#2a2420';
     cx.beginPath();cx.ellipse(x,y-8*s,7*s,5*s,0,0,Math.PI*2);cx.fill();
     cx.beginPath();cx.arc(x+5*s,y-12*s,3.5*s,0,Math.PI*2);cx.fill();
-    cx.fillStyle='#c8932a';cx.beginPath();cx.moveTo(x+8*s,y-12*s);cx.lineTo(x+13*s,y-11*s);cx.lineTo(x+8*s,y-10*s);cx.closePath();cx.fill();
+    cx.fillStyle='#f0a020';cx.beginPath();cx.moveTo(x+8*s,y-12*s);cx.lineTo(x+13*s,y-11*s);cx.lineTo(x+8*s,y-10*s);cx.closePath();cx.fill();
   } else {
     // Conejo de bosque, silueta simple
     cx.fillStyle='#5a4030';
@@ -491,13 +515,13 @@ function obstacles(){
     var s=sc(o.z),sx=wX(o.nx,o.z),sy=wY(o.z);
     cx.save();cx.translate(sx,sy);cx.scale(s,s);
     if(o.t==='stone'){
-      cx.fillStyle=o.hit?'#ff5533':'#9098a0';
+      cx.fillStyle=o.hit?'#ff4422':'#8090a8';
       cx.beginPath();cx.moveTo(-18,2);cx.lineTo(-22,-7);cx.lineTo(-12,-16);
       cx.lineTo(4,-18);cx.lineTo(18,-9);cx.lineTo(20,2);cx.closePath();cx.fill();
       cx.strokeStyle=o.hit?'#ff8866':'#5a6068';cx.lineWidth=1.5;cx.stroke();
     }else if(o.t==='curb'){
-      cx.fillStyle=o.hit?'#ff6644':'#8a8680';cx.fillRect(-30,-12,60,10);
-      cx.fillStyle=o.hit?'#ff8855':'#a8a49c';cx.beginPath();cx.ellipse(0,-12,30,7,0,0,Math.PI*2);cx.fill();
+      cx.fillStyle=o.hit?'#ff4422':'#e06010';cx.fillRect(-30,-12,60,10);
+      cx.fillStyle=o.hit?'#ff6644':'#f07820';cx.beginPath();cx.ellipse(0,-12,30,7,0,0,Math.PI*2);cx.fill();
       cx.fillStyle=o.hit?'#cc3300':'#5c5852';
       cx.beginPath();cx.ellipse(-30,-7,6,9,0,0,Math.PI*2);cx.fill();
       cx.beginPath();cx.ellipse(30,-7,6,9,0,0,Math.PI*2);cx.fill();
@@ -510,13 +534,13 @@ function obstacles(){
       cx.fillStyle='rgba(255,220,140,.25)';
       cx.beginPath();cx.arc(0,-68,16,0,Math.PI*2);cx.fill();
     }else{
-      cx.fillStyle='#9a948c';
+      cx.fillStyle='#7ab830';
       cx.beginPath();cx.moveTo(-28,2);cx.lineTo(28,2);cx.lineTo(28,-6);cx.lineTo(-28,-28);cx.closePath();cx.fill();
-      cx.fillStyle='#bdb6ac';
+      cx.fillStyle='#a0d840';
       cx.beginPath();cx.moveTo(-28,-28);cx.lineTo(28,-6);cx.lineTo(28,-4);cx.lineTo(-28,-26);cx.closePath();cx.fill();
       cx.fillStyle='#222';cx.fillRect(-26,-22,52,4);
       cx.fillStyle='#c89a3a';cx.fillRect(-26,-22,13,4);cx.fillRect(0,-22,13,4);
-      cx.fillStyle='#8a9a4a';cx.font='bold 8px monospace';cx.textAlign='center';cx.fillText('SALTO',0,-11);
+      cx.fillStyle='#4ab840';cx.font='bold 8px monospace';cx.textAlign='center';cx.fillText('SALTO',0,-11);
     }
     cx.restore();
   }
@@ -559,14 +583,14 @@ function drawHandlebars(){
   cx.beginPath();cx.ellipse(138,-4,24,9,0,0,Math.PI*2);cx.fill();
   cx.fillStyle='#0d0d0d';
   cx.beginPath();cx.ellipse(0,66,58,22,0,0,Math.PI);cx.fill();
-  cx.strokeStyle='#8a9a4a';cx.lineWidth=3;
+  cx.strokeStyle='#4ab840';cx.lineWidth=3;
   cx.beginPath();cx.ellipse(0,66,58,22,0,0,Math.PI);cx.stroke();
   cx.strokeStyle='#444';cx.lineWidth=5;
   cx.beginPath();cx.ellipse(0,66,48,17,0,0,Math.PI);cx.stroke();
   cx.strokeStyle='#666';cx.lineWidth=2;
   cx.beginPath();cx.ellipse(0,66,36,11,0,0,Math.PI);cx.stroke();
   // hub central — marca exacta el eje del jugador
-  cx.fillStyle='#8a9a4a';
+  cx.fillStyle='#4ab840';
   cx.beginPath();cx.arc(0,60,4,0,Math.PI*2);cx.fill();
   cx.fillStyle='rgba(154,230,42,.25)';
   cx.beginPath();cx.arc(0,60,10,0,Math.PI*2);cx.fill();
@@ -577,21 +601,21 @@ function drawHandlebars(){
 function logoCrisp(x,y,scale,full){
   mctx.save();mctx.translate(x,y);mctx.scale(scale,scale);
   mctx.save();mctx.scale(.5,.5);
-  mctx.strokeStyle='#8a9a4a';mctx.lineWidth=5;
+  mctx.strokeStyle='#4ab840';mctx.lineWidth=5;
   mctx.beginPath();
   var pts=[[-20,-34],[20,-34],[38,0],[20,34],[-20,34],[-38,0]];
   mctx.moveTo(pts[0][0],pts[0][1]);
   for(var p=1;p<pts.length;p++)mctx.lineTo(pts[p][0],pts[p][1]);
   mctx.closePath();mctx.stroke();
   mctx.beginPath();mctx.arc(0,0,20,Math.PI*.6,Math.PI*1.4);mctx.stroke();
-  mctx.fillStyle='#8a9a4a';
+  mctx.fillStyle='#4ab840';
   mctx.beginPath();mctx.moveTo(4,-26);mctx.lineTo(-8,2);mctx.lineTo(2,2);mctx.lineTo(-4,26);mctx.lineTo(14,-2);mctx.lineTo(4,-2);mctx.closePath();mctx.fill();
   mctx.restore();
   if(full){
     mctx.textAlign='left';
     strokeText(mctx,'STAGE',14,-4,'#fff','rgba(0,0,0,.6)',5);
     mctx.font='bold 26px Impact,Arial Black,sans-serif';
-    strokeText(mctx,'CRONO',14,22,'#8a9a4a','rgba(0,0,0,.6)',5);
+    strokeText(mctx,'CRONO',14,22,'#4ab840','rgba(0,0,0,.6)',5);
   }
   mctx.restore();
 }
@@ -601,14 +625,14 @@ function hud(){
 
   // PUNTOS — arriba a la derecha del logo, sin chocar
   woodPanel(mctx,52,8,108,30,7);
-  mctx.textAlign='left';mctx.font='bold 9px Arial';mctx.fillStyle='#8a9a4a';
+  mctx.textAlign='left';mctx.font='bold 9px Arial';mctx.fillStyle='#4ab840';
   mctx.fillText('PUNTOS',60,20);
   mctx.font='bold 16px Arial';mctx.fillStyle='#fff';
   mctx.fillText(Math.floor(points).toLocaleString('es-CL'),60,34);
 
   // KM + RECORD debajo
   woodPanel(mctx,8,42,150,34,6);
-  mctx.font='bold 9px Arial';mctx.fillStyle='#8a9a4a';mctx.fillText('KM',16,56);
+  mctx.font='bold 9px Arial';mctx.fillStyle='#4ab840';mctx.fillText('KM',16,56);
   mctx.font='bold 13px Arial';mctx.fillStyle='#fff';mctx.fillText(score,46,56);
   mctx.font='8px Arial';mctx.fillStyle='#aaa';
   mctx.fillText(best>0?('RECORD '+best+' KM'):'SIN RECORD AÚN',16,69);
@@ -623,7 +647,7 @@ function hud(){
   woodPanel(mctx,pX,pY,pW,pH,8);
 
   // Fila velocidad
-  mctx.font='bold 8px Arial';mctx.fillStyle='#8a9a4a';mctx.textAlign='left';
+  mctx.font='bold 8px Arial';mctx.fillStyle='#4ab840';mctx.textAlign='left';
   mctx.fillText('VELOCIDAD',pX+10,pY+13);
   mctx.textAlign='right';mctx.fillStyle='#fff';
   mctx.fillText(Math.round(speed*22)+' KM/H',pX+pW-10,pY+13);
@@ -632,13 +656,13 @@ function hud(){
   mctx.fillStyle='hsl('+(95-spd*55)+',40%,38%)';pillC(mctx,pX+10,pY+18,Math.max(4,(pW-20)*spd),8,4);mctx.fill();
 
   // Fila turbo
-  mctx.font='bold 8px Arial';mctx.fillStyle=turboActive>0?'#c8932a':'#8a9a4a';mctx.textAlign='left';
+  mctx.font='bold 8px Arial';mctx.fillStyle=turboActive>0?'#f0a020':'#4ab840';mctx.textAlign='left';
   mctx.fillText(turboActive>0?'¡TURBO ACTIVO!':'TURBO',pX+10,pY+38);
   mctx.textAlign='right';mctx.fillStyle='#fff';
   mctx.fillText(turboActive>0?'⚡':Math.round(turbo)+'%',pX+pW-10,pY+38);
   mctx.textAlign='left';
   mctx.fillStyle='rgba(0,0,0,.35)';pillC(mctx,pX+10,pY+43,pW-20,8,4);mctx.fill();
-  mctx.fillStyle=turboActive>0?'#fff':'#c8932a';pillC(mctx,pX+10,pY+43,Math.max(4,(pW-20)*(turbo/100)),8,4);mctx.fill();
+  mctx.fillStyle=turboActive>0?'#fff':'#f0a020';pillC(mctx,pX+10,pY+43,Math.max(4,(pW-20)*(turbo/100)),8,4);mctx.fill();
 
   // Popup de truco
   if(trick&&trick.timer>0){
@@ -651,14 +675,14 @@ function hud(){
     mctx.fillText('¡TRUCO!',W/2,103);
     mctx.font='bold 22px Impact,Arial Black,sans-serif';
     strokeText(mctx,trick.label,W/2,128,'#fff','rgba(0,0,0,.5)',3);
-    mctx.font='bold 13px Arial';mctx.fillStyle='#8a9a4a';
+    mctx.font='bold 13px Arial';mctx.fillStyle='#4ab840';
     mctx.fillText('+'+trick.pts+' PTS',W/2,141);
     mctx.globalAlpha=1;mctx.textAlign='left';
   }
   if(turboFlashT>0){
     mctx.globalAlpha=Math.min(1,turboFlashT/20);
     mctx.textAlign='center';mctx.font='bold 42px Impact,Arial Black,sans-serif';
-    strokeText(mctx,'¡TURBO!',W/2,H/2-30,'#c8932a','rgba(0,0,0,.5)',6);
+    strokeText(mctx,'¡TURBO!',W/2,H/2-30,'#f0a020','rgba(0,0,0,.5)',6);
     mctx.globalAlpha=1;mctx.textAlign='left';
   }
 }
@@ -672,12 +696,12 @@ function menu(){
   mctx.font='bold 46px Impact,Arial Black,sans-serif';
   strokeText(mctx,'CERRO ABAJO',W/2,H/2-22,'#a8472a','rgba(0,0,0,.6)',6);
   mctx.font='bold 20px Impact,Arial Black,sans-serif';
-  strokeText(mctx,'ARCADE',W/2,H/2+8,'#8a9a4a','rgba(0,0,0,.6)',4);
+  strokeText(mctx,'ARCADE',W/2,H/2+8,'#4ab840','rgba(0,0,0,.6)',4);
 
   woodPanel(mctx,W/2-180,H/2+28,360,76,12);
   mctx.font='bold 13px Arial';mctx.fillStyle='#eee';
   mctx.fillText('← →  GIRAR      ↑ / SPACE  SALTAR',W/2,H/2+54);
-  mctx.font='12px Arial';mctx.fillStyle='#8a9a4a';
+  mctx.font='12px Arial';mctx.fillStyle='#4ab840';
   mctx.fillText('GIRA EN EL AIRE PARA HACER WHIP · CAE EN RAMPAS PARA BIG AIR',W/2,H/2+74);
   mctx.font='11px Arial';mctx.fillStyle='rgba(255,255,255,.6)';
   mctx.fillText('ACUMULA TRUCOS PARA LLENAR EL TURBO',W/2,H/2+92);
@@ -702,7 +726,7 @@ function gameover(){
   mctx.font='12px Arial';mctx.fillStyle='#ccc';
   mctx.fillText('KM RECORRIDOS: '+score,W/2,H/2);
   if(score>0&&score===best){
-    mctx.font='bold 13px Arial';mctx.fillStyle='#8a9a4a';
+    mctx.font='bold 13px Arial';mctx.fillStyle='#4ab840';
     mctx.fillText('★  NUEVO RECORD  ★',W/2,H/2+22);
   }else{
     mctx.font='11px Arial';mctx.fillStyle='#888';
