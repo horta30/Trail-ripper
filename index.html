@@ -449,28 +449,21 @@ function woodPanel(c,x,y,w,h,r){
   pillC(c,x,y,w,h,r);c.stroke();
 }
 function sprocketC(c,x,y,r,filled){
-  var teeth=8, inner=r*.6, outer=r;
-  c.save();c.translate(x,y);
-  c.fillStyle=filled?'#c8932a':'#3a3228';
-  c.strokeStyle=filled?'#f0b840':'#5a5040';
-  c.lineWidth=1.2;
-  // Dientes del piñón
-  c.beginPath();
-  for(var i=0;i<teeth;i++){
-    var a0=(i/teeth)*Math.PI*2-Math.PI/teeth*.5;
-    var a1=(i/teeth)*Math.PI*2+Math.PI/teeth*.5;
-    var am=(i/teeth)*Math.PI*2;
-    c.lineTo(Math.cos(a0)*inner,Math.sin(a0)*inner);
-    c.lineTo(Math.cos(am)*outer,Math.sin(am)*outer);
-    c.lineTo(Math.cos(a1)*inner,Math.sin(a1)*inner);
-  }
-  c.closePath();c.fill();c.stroke();
-  // Agujero central
-  c.fillStyle=filled?'rgba(0,0,0,.35)':'rgba(0,0,0,.5)';
-  c.beginPath();c.arc(0,0,r*.28,0,Math.PI*2);c.fill();
+  // Círculo limpio — sin dientes ni rayos
+  c.beginPath();c.arc(x,y,r,0,Math.PI*2);
+  c.fillStyle=filled?'#f0b820':'#2a2218';
+  c.fill();
+  c.strokeStyle=filled?'#ffd84a':'#4a3a28';
+  c.lineWidth=2;c.stroke();
+  // Punto central
+  c.beginPath();c.arc(x,y,r*.22,0,Math.PI*2);
+  c.fillStyle=filled?'rgba(0,0,0,.35)':'rgba(255,255,255,.1)';
+  c.fill();
   // Brillo
-  if(filled){c.fillStyle='rgba(255,255,255,.25)';c.beginPath();c.arc(-r*.2,-r*.2,r*.18,0,Math.PI*2);c.fill();}
-  c.restore();
+  if(filled){
+    c.beginPath();c.arc(x-r*.28,y-r*.28,r*.22,0,Math.PI*2);
+    c.fillStyle='rgba(255,255,255,.3)';c.fill();
+  }
 }
 function strokeText(c,txt,x,y,fill,strokeCol,lw){
   c.lineWidth=lw||4;c.strokeStyle=strokeCol||'rgba(0,0,0,.65)';c.lineJoin='round';
