@@ -175,6 +175,9 @@ for(var xi=0;xi<=W;xi+=18)hills.push(H*.18+Math.sin(xi*.006)*35+Math.sin(xi*.018
 var whipFlag=false, rampFlag=false;
 var trick=null;
 var turbo=0, turboActive=0, turboFlashT=0;
+// Rider animation state
+var flipAngle=0, flipDir=0, flipDone=false;
+var wheelieTime=0, wheelieLean=0;
 
 // ─── CONTROLS ──────────────────────────────────────────────────────
 document.addEventListener('keydown',function(e){
@@ -213,6 +216,7 @@ function go(){
   rNX=0;rVX=0;rJ=0;rJV=0;rGnd=true;inv=0;crash=false;cT=0;
   obs=[];spc=0;tsc=0;lastScore=0;
   whipFlag=false;rampFlag=false;trick=null;turbo=0;turboActive=0;turboFlashT=0;
+  flipAngle=0;flipDir=0;flipDone=false;wheelieTime=0;wheelieLean=0;
   startMusic();
 }
 function jump(p){
@@ -234,8 +238,37 @@ function update(){
   if(keys['ArrowLeft']||keys['KeyA'])ax=-1;
   if(keys['ArrowRight']||keys['KeyD'])ax=1;
   if(tDir)ax=tDir;
-  if((keys['Space']||keys['ArrowUp']||tJump)&&rGnd)jump();
+  if((keys['Space']||tJump)&&rGnd)jump();
   tJump=false;
+
+  // Frontflip: UP en el aire
+  if(keys['ArrowUp']&&rGnd)jump();
+  if(keys['ArrowUp']&&!rGnd&&flipDir===0){flipDir=1;}
+  // Backflip / Wheelie: DOWN
+  if(keys['ArrowDown']&&rGnd){
+    wheelieTime++;
+    wheelieLean=Math.min(0.45, wheelieTime*0.018);
+  } else {
+    if(wheelieTime>30&&wheelieLean>0.1&&rGnd){
+      var wt=Math.round(wheelieTime/6);
+      trick={label:'WHEELIE',pts:wt*5,timer:70};
+      points+=wt*5;turbo=Math.min(100,turbo+10);sndTrick();
+    }
+    wheelieTime=0; wheelieLean*=0.82;
+  }
+  if(keys['ArrowDown']&&!rGnd&&flipDir===0){flipDir=-1;}
+
+  // Ejecutar flip en el aire
+  if(!rGnd&&flipDir!==0){
+    flipAngle+=flipDir*0.13;
+    if(!flipDone&&Math.abs(flipAngle)>=Math.PI*2){
+      flipDone=true;
+      var flipLabel=flipDir>0?'FRONTFLIP':'BACKFLIP';
+      var flipBonus=flipDir>0?350:400;
+      trick={label:flipLabel,pts:flipBonus,timer:80};
+      points+=flipBonus;turbo=Math.min(100,turbo+30);sndTrick();
+    }
+  }
 
   if(!rGnd&&ax!==0)whipFlag=true;
 
@@ -248,13 +281,21 @@ function update(){
     if(rJ>=0){
       rJ=0;rJV=0;rGnd=true;
       sndLand();
+      // Reset flip
+      var landed=flipDone;
+      if(!landed&&Math.abs(flipAngle)>0.5){
+        // aterrizó a mitad de flip — crash
+        if(inv<=0){lives--;sndCrash();crash=true;cT=40;inv=110;rJV=-9;rGnd=false;
+          if(lives<=0)setTimeout(function(){if(score>best)best=score;phase='gameover';stopMusic();},800);}
+      }
+      flipAngle=0;flipDir=0;flipDone=false;
       var label=null,bonus=0;
-      if(whipFlag&&rampFlag){label='BACKFLIP';bonus=400;}
+      if(whipFlag&&rampFlag){label='WHIP+AIR';bonus=300;}
       else if(rampFlag){label='BIG AIR';bonus=150;}
       else if(whipFlag){label='WHIP';bonus=250;}
-      if(label){
+      if(label&&!landed){
         points+=bonus;
-        turbo=Math.min(100,turbo+(label==='BACKFLIP'?35:label==='WHIP'?20:12));
+        turbo=Math.min(100,turbo+(rampFlag?12:20));
         trick={label:label,pts:bonus,timer:75};
         sndTrick();
       }
@@ -545,57 +586,143 @@ function obstacles(){
     cx.restore();
   }
 }
-var whipWobble=0;
-function drawHandlebars(){
+// ─── RIDER COMPLETO (visible dentro de la pista) ─────────────────────
+function drawRider(){
   if(phase!=='playing'&&phase!=='gameover')return;
-  whipWobble = (!rGnd&&whipFlag) ? Math.sin(fn*1.1)*14 : whipWobble*.8;
-  var steerDeg = rVX*9 + whipWobble;
-  var liftY = Math.max(-22,rJ*.22);
-  var bx=W/2, by=H-2+liftY;
-  cx.save();cx.translate(bx,by);
+  if(inv>0&&fn%6<3)return;
+
+  var rz=0.82;             // posición en profundidad de la pista (0=horizonte, 1=borde inferior)
+  var sx=wX(rNX,rz);
+  var sy=wY(rz)+rJ*0.85;
+  var rs=sc(rz)*1.25;      // escala base — un poco más grande que la perspectiva pura
+
+  // Sombra en el suelo
+  cx.fillStyle='rgba(0,0,0,'+(rJ<-5?Math.max(0,.22-(-rJ)*.003):.22)+')';
+  cx.beginPath();cx.ellipse(wX(rNX,rz),wY(rz)+4,30*rs,7*rs,0,0,Math.PI*2);cx.fill();
+
+  cx.save();
+  cx.translate(sx,sy);
+  cx.scale(rs,rs);
+
+  // Lean lateral con el giro
+  cx.rotate(rVX*14*Math.PI/180);
+
+  // Flip (frontflip / backflip)
+  if(Math.abs(flipAngle)>0.01) cx.rotate(-flipAngle);
+
+  // Wheelie: inclinar hacia atrás
+  if(wheelieLean>0.02) cx.rotate(wheelieLean);
+
   if(crash&&cT>0){
     var t=1-cT/40;
-    cx.rotate(t*.7*(rNX<0?-1:1));
-    cx.translate(0,t*30);
-    cx.globalAlpha=Math.max(.2,1-t*.7);
-  } else {
-    cx.rotate(steerDeg*Math.PI/180);
+    cx.save();cx.rotate(t*1.8*(rNX<0?-1:1));cx.translate(t*20,-t*15);
+    cx.globalAlpha=Math.max(.2,1-t*.6);
+    cx.fillStyle='#a8472a';cx.beginPath();cx.ellipse(0,-10,22,12,t*.7,0,Math.PI*2);cx.fill();
+    cx.fillStyle='#ddd';cx.beginPath();cx.arc(12,-20,10,0,Math.PI*2);cx.fill();
+    cx.restore();cx.restore();return;
   }
-  cx.strokeStyle='#caa07a';cx.lineWidth=20;cx.lineCap='round';
-  cx.beginPath();cx.moveTo(-150,86);cx.lineTo(-58,18);cx.stroke();
-  cx.beginPath();cx.moveTo(150,86);cx.lineTo(58,18);cx.stroke();
-  cx.fillStyle='#2e2418';cx.fillRect(-7,10,14,40);
-  cx.fillStyle='#3a2e1e';cx.fillRect(-9,4,18,10);
-  cx.strokeStyle='#201810';cx.lineWidth=11;cx.lineCap='round';
-  cx.beginPath();cx.moveTo(-130,2);cx.lineTo(130,2);cx.stroke();
-  cx.strokeStyle='#3a2e1e';cx.lineWidth=6;
-  cx.beginPath();cx.moveTo(-130,2);cx.lineTo(130,2);cx.stroke();
-  cx.fillStyle='#a8472a';
-  cx.fillRect(-150,-9,40,22);
-  cx.fillRect(110,-9,40,22);
-  cx.fillStyle='rgba(0,0,0,.25)';
-  cx.fillRect(-150,-9,40,4);cx.fillRect(110,-9,40,4);
+
+  var steer=rVX*.16;
+  // ── RUEDA TRASERA (elipse vertical: más alta que ancha) ──
+  var WCY=20,WRX=12,WRY=19;
+  cx.fillStyle='#111';cx.beginPath();cx.ellipse(0,WCY,WRX,WRY,0,0,Math.PI*2);cx.fill();
+  cx.strokeStyle='#333';cx.lineWidth=4.5;cx.beginPath();cx.ellipse(0,WCY,WRX-2,WRY-2,0,0,Math.PI*2);cx.stroke();
+  cx.strokeStyle='#4ab840';cx.lineWidth=1.5;cx.beginPath();cx.ellipse(0,WCY,WRX-5,WRY-5,0,0,Math.PI*2);cx.stroke();
+  cx.strokeStyle='#555';cx.lineWidth=1.5;
+  for(var a=0;a<Math.PI*2;a+=Math.PI*2/5){
+    cx.beginPath();cx.moveTo(Math.cos(a)*3.5,WCY+Math.sin(a)*3.5);
+    cx.lineTo(Math.cos(a)*(WRX-4),WCY+Math.sin(a)*(WRY-4));cx.stroke();
+  }
+  cx.fillStyle='#aaa';cx.beginPath();cx.arc(0,WCY,4,0,Math.PI*2);cx.fill();
+  cx.fillStyle='#555';cx.beginPath();cx.arc(0,WCY,2,0,Math.PI*2);cx.fill();
+
+  // ── CUADRO (seat stays forman V visible → confirma rueda vertical) ──
+  cx.strokeStyle='#a8472a';cx.lineWidth=3;cx.lineCap='round';
+  cx.beginPath();cx.moveTo(-2,WCY-3);cx.lineTo(-8,-16);cx.stroke();
+  cx.beginPath();cx.moveTo(2,WCY-3);cx.lineTo(8,-16);cx.stroke();
+  cx.strokeStyle='#c8583a';cx.lineWidth=2.5;
+  cx.beginPath();cx.moveTo(-8,-16);cx.lineTo(8,-16);cx.stroke();
+  cx.strokeStyle='#a8472a';cx.lineWidth=2;
+  cx.beginPath();cx.moveTo(0,-16);cx.lineTo(0,-5);cx.stroke();
+
+  // ── RUEDA DELANTERA (más alta que ancha, gira con steer) ──
+  var fRY=Math.max(7,WRY*.55-Math.abs(steer)*6);
+  var fRX=WRX*.52;
+  cx.fillStyle='#0f0f0f';cx.beginPath();cx.ellipse(0,-26,fRX,fRY,steer,0,Math.PI*2);cx.fill();
+  cx.strokeStyle='#333';cx.lineWidth=3;cx.beginPath();cx.ellipse(0,-26,fRX,fRY,steer,0,Math.PI*2);cx.stroke();
+  cx.strokeStyle='#555';cx.lineWidth=1.5;cx.beginPath();cx.ellipse(0,-26,fRX-3,fRY-3,steer,0,Math.PI*2);cx.stroke();
+  // Fork
+  cx.strokeStyle='#999';cx.lineWidth=2;
+  cx.beginPath();cx.moveTo(-3,-5);cx.quadraticCurveTo(-5,-14,-4,-26);cx.stroke();
+  cx.beginPath();cx.moveTo(3,-5);cx.quadraticCurveTo(5,-14,4,-26);cx.stroke();
+
+  // ── PIERNAS ──
   cx.fillStyle='#241a12';
-  cx.beginPath();cx.ellipse(-138,4,26,20,0,0,Math.PI*2);cx.fill();
-  cx.beginPath();cx.ellipse(138,4,26,20,0,0,Math.PI*2);cx.fill();
+  cx.beginPath();cx.moveTo(-9,-6);cx.lineTo(-18,5);cx.lineTo(-14,8);cx.lineTo(-5,-3);cx.closePath();cx.fill();
+  cx.beginPath();cx.moveTo(-18,5);cx.lineTo(-17,WCY);cx.lineTo(-13,WCY);cx.lineTo(-14,5);cx.closePath();cx.fill();
+  cx.beginPath();cx.moveTo(9,-6);cx.lineTo(18,5);cx.lineTo(14,8);cx.lineTo(5,-3);cx.closePath();cx.fill();
+  cx.beginPath();cx.moveTo(18,5);cx.lineTo(17,WCY);cx.lineTo(13,WCY);cx.lineTo(14,5);cx.closePath();cx.fill();
+  // Zapatillas
+  cx.fillStyle='#111';
+  cx.beginPath();cx.moveTo(-20,WCY-3);cx.lineTo(-10,WCY-3);cx.lineTo(-9,WCY+1);cx.lineTo(-21,WCY+1);cx.closePath();cx.fill();
+  cx.beginPath();cx.moveTo(20,WCY-3);cx.lineTo(10,WCY-3);cx.lineTo(9,WCY+1);cx.lineTo(21,WCY+1);cx.closePath();cx.fill();
+  cx.fillStyle='#a8472a';cx.fillRect(-20,WCY-3,4,3);cx.fillRect(17,WCY-3,4,3);
+  // Pedales
+  cx.fillStyle='#555';cx.fillRect(-21,WCY-5,10,2.5);cx.fillRect(12,WCY-5,10,2.5);
+
+  // ── CUERPO ──
+  cx.fillStyle='#241a12';
+  cx.beginPath();cx.moveTo(-10,-4);cx.lineTo(10,-4);cx.lineTo(8,3);cx.lineTo(-8,3);cx.closePath();cx.fill();
+  // Jersey — color vivo para identificarlo rápido
   cx.fillStyle='#a8472a';
-  cx.beginPath();cx.ellipse(-138,-4,24,9,0,0,Math.PI*2);cx.fill();
-  cx.beginPath();cx.ellipse(138,-4,24,9,0,0,Math.PI*2);cx.fill();
-  cx.fillStyle='#0d0d0d';
-  cx.beginPath();cx.ellipse(0,66,58,22,0,0,Math.PI);cx.fill();
-  cx.strokeStyle='#4ab840';cx.lineWidth=3;
-  cx.beginPath();cx.ellipse(0,66,58,22,0,0,Math.PI);cx.stroke();
-  cx.strokeStyle='#444';cx.lineWidth=5;
-  cx.beginPath();cx.ellipse(0,66,48,17,0,0,Math.PI);cx.stroke();
-  cx.strokeStyle='#666';cx.lineWidth=2;
-  cx.beginPath();cx.ellipse(0,66,36,11,0,0,Math.PI);cx.stroke();
-  // hub central — marca exacta el eje del jugador
-  cx.fillStyle='#4ab840';
-  cx.beginPath();cx.arc(0,60,4,0,Math.PI*2);cx.fill();
-  cx.fillStyle='rgba(154,230,42,.25)';
-  cx.beginPath();cx.arc(0,60,10,0,Math.PI*2);cx.fill();
+  cx.beginPath();cx.moveTo(-11,-4);cx.lineTo(11,-4);cx.lineTo(10,-22);cx.lineTo(-10,-22);cx.closePath();cx.fill();
+  cx.fillStyle='#7a3018';
+  cx.beginPath();cx.moveTo(-11,-4);cx.lineTo(-10,-22);cx.lineTo(-6,-22);cx.lineTo(-7,-4);cx.closePath();cx.fill();
+  cx.beginPath();cx.moveTo(11,-4);cx.lineTo(10,-22);cx.lineTo(6,-22);cx.lineTo(7,-4);cx.closePath();cx.fill();
+  // Dorsal
+  cx.fillStyle='rgba(255,255,255,.88)';cx.fillRect(-4,-18,8,8);
+  cx.fillStyle='#a8472a';cx.font='bold 6px monospace';cx.textAlign='center';cx.fillText('1',0,-12);
+
+  // ── BRAZOS ──
+  cx.strokeStyle='#a8472a';cx.lineWidth=6;cx.lineCap='round';
+  cx.beginPath();cx.moveTo(-10,-21);cx.quadraticCurveTo(-15,-17,-19,-12);cx.stroke();
+  cx.strokeStyle='#7a3018';cx.lineWidth=3.5;
+  cx.beginPath();cx.moveTo(-10,-21);cx.quadraticCurveTo(-15,-17,-19,-12);cx.stroke();
+  cx.strokeStyle='#a8472a';cx.lineWidth=6;
+  cx.beginPath();cx.moveTo(10,-21);cx.quadraticCurveTo(15,-17,19,-12);cx.stroke();
+  cx.strokeStyle='#7a3018';cx.lineWidth=3.5;
+  cx.beginPath();cx.moveTo(10,-21);cx.quadraticCurveTo(15,-17,19,-12);cx.stroke();
+  // Guantes
+  cx.fillStyle='#1a1a1a';
+  cx.beginPath();cx.arc(-19,-12,3.5,0,Math.PI*2);cx.fill();
+  cx.beginPath();cx.arc(19,-12,3.5,0,Math.PI*2);cx.fill();
+  // Manubrio (gira con steering)
+  cx.strokeStyle='#555';cx.lineWidth=4;
+  cx.beginPath();cx.moveTo(-21,-11+steer*8);cx.lineTo(21,-11-steer*8);cx.stroke();
+  cx.strokeStyle='#888';cx.lineWidth=2;
+  cx.beginPath();cx.moveTo(-21,-11+steer*8);cx.lineTo(21,-11-steer*8);cx.stroke();
+  cx.fillStyle='#2a2a2a';
+  cx.beginPath();cx.arc(-21,-11+steer*8,3.5,0,Math.PI*2);cx.fill();
+  cx.beginPath();cx.arc(21,-11-steer*8,3.5,0,Math.PI*2);cx.fill();
+
+  // ── CASCO INTEGRAL MX ──
+  var HC=-32;
+  cx.fillStyle='#e8e8e8';cx.beginPath();cx.ellipse(0,HC,12,13,0,0,Math.PI*2);cx.fill();
+  cx.fillStyle='#a8472a';cx.beginPath();cx.ellipse(0,HC,12,13,0,Math.PI,Math.PI*2);cx.fill();
+  cx.fillStyle='#4ab840';cx.fillRect(-12,HC,24,3.5);
+  // Visera MX
+  cx.fillStyle='#1a1a1a';
+  cx.beginPath();cx.moveTo(-13,HC-10);cx.lineTo(-15,HC-16);cx.lineTo(15,HC-16);cx.lineTo(13,HC-10);cx.closePath();cx.fill();
+  // Chin guard
+  cx.fillStyle='#ccc';
+  cx.beginPath();cx.moveTo(-8,HC+10);cx.lineTo(-10,HC+15);cx.lineTo(10,HC+15);cx.lineTo(8,HC+10);cx.closePath();cx.fill();
+  // Vents
+  cx.fillStyle='rgba(0,0,0,.5)';
+  cx.fillRect(-5,HC-15,3,4);cx.fillRect(-1,HC-16,3,4);cx.fillRect(3,HC-15,3,4);
+
   cx.restore();
 }
+
 
 // ─── HUD NÍTIDO (canvas principal, alta resolución) ─────────────────
 function logoCrisp(x,y,scale,full){
@@ -700,9 +827,9 @@ function menu(){
 
   woodPanel(mctx,W/2-180,H/2+28,360,76,12);
   mctx.font='bold 13px Arial';mctx.fillStyle='#eee';
-  mctx.fillText('← →  GIRAR      ↑ / SPACE  SALTAR',W/2,H/2+54);
+  mctx.fillText('← →  GIRAR      ↑  SALTAR / FRONTFLIP',W/2,H/2+54);
   mctx.font='12px Arial';mctx.fillStyle='#4ab840';
-  mctx.fillText('GIRA EN EL AIRE PARA HACER WHIP · CAE EN RAMPAS PARA BIG AIR',W/2,H/2+74);
+  mctx.fillText('↓ en tierra = WHEELIE  ·  ↓ en aire = BACKFLIP',W/2,H/2+74);
   mctx.font='11px Arial';mctx.fillStyle='rgba(255,255,255,.6)';
   mctx.fillText('ACUMULA TRUCOS PARA LLENAR EL TURBO',W/2,H/2+92);
 
@@ -747,8 +874,7 @@ function loop(){
     cx.save();
     cx.setTransform(OW/W,0,0,OH/H,0,0);
     cx.clearRect(0,0,W,H);
-    sky();mountains();trail();roadside();groundShadow();obstacles();
-    drawHandlebars();
+    sky();mountains();trail();roadside();groundShadow();obstacles();drawRider();
     cx.restore();
 
     mctx.imageSmoothingEnabled=false;
