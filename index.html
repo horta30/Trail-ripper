@@ -364,17 +364,28 @@ function woodPanel(c,x,y,w,h,r){
   c.strokeStyle='rgba(168,114,74,.3)';c.lineWidth=1.5;
   pillC(c,x,y,w,h,r);c.stroke();
 }
-function heartC(c,x,y,s,filled){
-  c.save();c.translate(x,y);c.scale(s,s);
-  c.fillStyle=filled?'#9a3a2a':'#2e2218';
+function sprocketC(c,x,y,r,filled){
+  var teeth=8, inner=r*.6, outer=r;
+  c.save();c.translate(x,y);
+  c.fillStyle=filled?'#c8932a':'#3a3228';
+  c.strokeStyle=filled?'#f0b840':'#5a5040';
+  c.lineWidth=1.2;
+  // Dientes del piñón
   c.beginPath();
-  c.moveTo(0,3);
-  c.bezierCurveTo(-7,-4,-7,-9,-2,-9);
-  c.bezierCurveTo(0,-9,0,-6,0,-5);
-  c.bezierCurveTo(0,-6,0,-9,2,-9);
-  c.bezierCurveTo(7,-9,7,-4,0,3);
-  c.closePath();c.fill();
-  if(filled){c.fillStyle='rgba(255,255,255,.4)';c.beginPath();c.ellipse(-2,-6,1.4,1,0,0,Math.PI*2);c.fill();}
+  for(var i=0;i<teeth;i++){
+    var a0=(i/teeth)*Math.PI*2-Math.PI/teeth*.5;
+    var a1=(i/teeth)*Math.PI*2+Math.PI/teeth*.5;
+    var am=(i/teeth)*Math.PI*2;
+    c.lineTo(Math.cos(a0)*inner,Math.sin(a0)*inner);
+    c.lineTo(Math.cos(am)*outer,Math.sin(am)*outer);
+    c.lineTo(Math.cos(a1)*inner,Math.sin(a1)*inner);
+  }
+  c.closePath();c.fill();c.stroke();
+  // Agujero central
+  c.fillStyle=filled?'rgba(0,0,0,.35)':'rgba(0,0,0,.5)';
+  c.beginPath();c.arc(0,0,r*.28,0,Math.PI*2);c.fill();
+  // Brillo
+  if(filled){c.fillStyle='rgba(255,255,255,.25)';c.beginPath();c.arc(-r*.2,-r*.2,r*.18,0,Math.PI*2);c.fill();}
   c.restore();
 }
 function strokeText(c,txt,x,y,fill,strokeCol,lw){
@@ -623,102 +634,172 @@ function drawRider(){
   }
 
   var steer=rVX*.16;
-  // ── RUEDA TRASERA (elipse vertical: más alta que ancha) ──
-  var WCY=20,WRX=12,WRY=19;
+
+  // ═══ BICICLETA MTB ════════════════════════════════════════════════
+
+  // ── RUEDA TRASERA — elipse vertical (más alta q ancha) ─────────────
+  var WCY=24, WRX=14, WRY=22;
+  // Neumático MTB con textura knobby
   cx.fillStyle='#111';cx.beginPath();cx.ellipse(0,WCY,WRX,WRY,0,0,Math.PI*2);cx.fill();
-  cx.strokeStyle='#333';cx.lineWidth=4.5;cx.beginPath();cx.ellipse(0,WCY,WRX-2,WRY-2,0,0,Math.PI*2);cx.stroke();
-  cx.strokeStyle='#4ab840';cx.lineWidth=1.5;cx.beginPath();cx.ellipse(0,WCY,WRX-5,WRY-5,0,0,Math.PI*2);cx.stroke();
-  cx.strokeStyle='#555';cx.lineWidth=1.5;
-  for(var a=0;a<Math.PI*2;a+=Math.PI*2/5){
-    cx.beginPath();cx.moveTo(Math.cos(a)*3.5,WCY+Math.sin(a)*3.5);
-    cx.lineTo(Math.cos(a)*(WRX-4),WCY+Math.sin(a)*(WRY-4));cx.stroke();
+  // Borde del neumático (grueso, knobby)
+  cx.strokeStyle='#1a1a1a';cx.lineWidth=5;cx.beginPath();cx.ellipse(0,WCY,WRX,WRY,0,0,Math.PI*2);cx.stroke();
+  // Rim plateado
+  cx.strokeStyle='#888';cx.lineWidth=3.5;cx.beginPath();cx.ellipse(0,WCY,WRX-4,WRY-4,0,0,Math.PI*2);cx.stroke();
+  cx.strokeStyle='#aaa';cx.lineWidth=1.5;cx.beginPath();cx.ellipse(0,WCY,WRX-6,WRY-6,0,0,Math.PI*2);cx.stroke();
+  // Spokes — del hub al rim
+  cx.strokeStyle='#777';cx.lineWidth=1.2;
+  for(var a=0;a<Math.PI*2;a+=Math.PI*2/8){
+    cx.beginPath();cx.moveTo(Math.cos(a)*4,WCY+Math.sin(a)*4);
+    cx.lineTo(Math.cos(a)*(WRX-5),WCY+Math.sin(a)*(WRY-5));cx.stroke();
   }
-  cx.fillStyle='#aaa';cx.beginPath();cx.arc(0,WCY,4,0,Math.PI*2);cx.fill();
-  cx.fillStyle='#555';cx.beginPath();cx.arc(0,WCY,2,0,Math.PI*2);cx.fill();
+  cx.fillStyle='#ccc';cx.beginPath();cx.arc(0,WCY,4.5,0,Math.PI*2);cx.fill();
+  cx.fillStyle='#666';cx.beginPath();cx.arc(0,WCY,2.2,0,Math.PI*2);cx.fill();
 
-  // ── CUADRO (seat stays forman V visible → confirma rueda vertical) ──
-  cx.strokeStyle='#a8472a';cx.lineWidth=3;cx.lineCap='round';
-  cx.beginPath();cx.moveTo(-2,WCY-3);cx.lineTo(-8,-16);cx.stroke();
-  cx.beginPath();cx.moveTo(2,WCY-3);cx.lineTo(8,-16);cx.stroke();
-  cx.strokeStyle='#c8583a';cx.lineWidth=2.5;
-  cx.beginPath();cx.moveTo(-8,-16);cx.lineTo(8,-16);cx.stroke();
-  cx.strokeStyle='#a8472a';cx.lineWidth=2;
-  cx.beginPath();cx.moveTo(0,-16);cx.lineTo(0,-5);cx.stroke();
+  // ── CUADRO MTB — seat stays forman V clara desde hub ───────────────
+  // Tubo de cadena (chainstay)
+  cx.strokeStyle='#555';cx.lineWidth=4;cx.lineCap='round';
+  cx.beginPath();cx.moveTo(-3,WCY);cx.lineTo(-10,-2);cx.stroke(); // BB left
+  cx.beginPath();cx.moveTo(3,WCY);cx.lineTo(10,-2);cx.stroke();  // BB right
+  // Bottom bracket
+  cx.fillStyle='#666';cx.beginPath();cx.arc(0,-2,5.5,0,Math.PI*2);cx.fill();
+  cx.fillStyle='#888';cx.beginPath();cx.arc(0,-2,3,0,Math.PI*2);cx.fill();
+  // Tubo del asiento (seat tube) y seat stays
+  cx.strokeStyle='#c8582a';cx.lineWidth=4;
+  cx.beginPath();cx.moveTo(0,-2);cx.lineTo(0,-22);cx.stroke();       // seat tube
+  cx.strokeStyle='#a8472a';cx.lineWidth=3;
+  cx.beginPath();cx.moveTo(-3,WCY-2);cx.lineTo(-6,-22);cx.stroke();  // left seat stay
+  cx.beginPath();cx.moveTo(3,WCY-2);cx.lineTo(6,-22);cx.stroke();   // right seat stay
+  // Down tube & top tube hints
+  cx.strokeStyle='#c8582a';cx.lineWidth=3.5;
+  cx.beginPath();cx.moveTo(0,-2);cx.lineTo(5,-20);cx.stroke();
+  // Sillín MTB pequeño
+  cx.fillStyle='#1a1a1a';cx.beginPath();cx.ellipse(0,-23,6,2.5,0,0,Math.PI*2);cx.fill();
+  cx.fillStyle='#333';cx.beginPath();cx.ellipse(-2,-23,3.5,2,0,0,Math.PI*2);cx.fill();
 
-  // ── RUEDA DELANTERA (más alta que ancha, gira con steer) ──
-  var fRY=Math.max(7,WRY*.55-Math.abs(steer)*6);
-  var fRX=WRX*.52;
-  cx.fillStyle='#0f0f0f';cx.beginPath();cx.ellipse(0,-26,fRX,fRY,steer,0,Math.PI*2);cx.fill();
-  cx.strokeStyle='#333';cx.lineWidth=3;cx.beginPath();cx.ellipse(0,-26,fRX,fRY,steer,0,Math.PI*2);cx.stroke();
-  cx.strokeStyle='#555';cx.lineWidth=1.5;cx.beginPath();cx.ellipse(0,-26,fRX-3,fRY-3,steer,0,Math.PI*2);cx.stroke();
-  // Fork
-  cx.strokeStyle='#999';cx.lineWidth=2;
-  cx.beginPath();cx.moveTo(-3,-5);cx.quadraticCurveTo(-5,-14,-4,-26);cx.stroke();
-  cx.beginPath();cx.moveTo(3,-5);cx.quadraticCurveTo(5,-14,4,-26);cx.stroke();
+  // ── RUEDA DELANTERA — con suspensión MTB visible ───────────────────
+  var fRY=Math.max(9,WRY*.58-Math.abs(steer)*6);
+  var fRX=WRX*.55;
+  cx.fillStyle='#0f0f0f';cx.beginPath();cx.ellipse(0,-34,fRX,fRY,steer,0,Math.PI*2);cx.fill();
+  cx.strokeStyle='#1a1a1a';cx.lineWidth=5;cx.beginPath();cx.ellipse(0,-34,fRX,fRY,steer,0,Math.PI*2);cx.stroke();
+  cx.strokeStyle='#777';cx.lineWidth=3;cx.beginPath();cx.ellipse(0,-34,fRX-3.5,fRY-3.5,steer,0,Math.PI*2);cx.stroke();
+  cx.strokeStyle='#999';cx.lineWidth=1.2;cx.beginPath();cx.ellipse(0,-34,fRX-5,fRY-5,steer,0,Math.PI*2);cx.stroke();
+  cx.fillStyle='#ccc';cx.beginPath();cx.arc(0,-34,3.5,0,Math.PI*2);cx.fill();
+  // Horquilla delantera con suspensión (tubes gruesos)
+  var fa=steer*.5;
+  cx.strokeStyle='#bbb';cx.lineWidth=5;cx.lineCap='round';
+  cx.beginPath();cx.moveTo(-4,-8);cx.quadraticCurveTo(-5+fa*6,-20,-5+fa*8,-34+fRY-2);cx.stroke();
+  cx.beginPath();cx.moveTo(4,-8);cx.quadraticCurveTo(5+fa*6,-20,5+fa*8,-34+fRY-2);cx.stroke();
+  // Estribo de suspensión (crown)
+  cx.strokeStyle='#aaa';cx.lineWidth=4;
+  cx.beginPath();cx.moveTo(-4,-8);cx.lineTo(4,-8);cx.stroke();
+  // Tubo stanchion superior (plateado brillante)
+  cx.strokeStyle='#e0e0e0';cx.lineWidth=3;
+  cx.beginPath();cx.moveTo(-4,-8);cx.lineTo(-4+fa*4,-24);cx.stroke();
+  cx.beginPath();cx.moveTo(4,-8);cx.lineTo(4+fa*4,-24);cx.stroke();
+  // Manubrio MTB ancho
+  cx.strokeStyle='#444';cx.lineWidth=5;cx.lineCap='round';
+  cx.beginPath();cx.moveTo(-28,-6+steer*12);cx.lineTo(28,-6-steer*12);cx.stroke();
+  cx.strokeStyle='#777';cx.lineWidth=2.5;
+  cx.beginPath();cx.moveTo(-28,-6+steer*12);cx.lineTo(28,-6-steer*12);cx.stroke();
+  // Stem
+  cx.fillStyle='#555';cx.beginPath();cx.moveTo(-3,-6);cx.lineTo(3,-6);cx.lineTo(2,-10);cx.lineTo(-2,-10);cx.closePath();cx.fill();
+  // Grips naranjos en los extremos
+  cx.fillStyle='#c8582a';
+  cx.beginPath();cx.ellipse(-28,-6+steer*12,5,3,steer*.3,0,Math.PI*2);cx.fill();
+  cx.beginPath();cx.ellipse(28,-6-steer*12,5,3,-steer*.3,0,Math.PI*2);cx.fill();
 
-  // ── PIERNAS ──
-  cx.fillStyle='#241a12';
-  cx.beginPath();cx.moveTo(-9,-6);cx.lineTo(-18,5);cx.lineTo(-14,8);cx.lineTo(-5,-3);cx.closePath();cx.fill();
-  cx.beginPath();cx.moveTo(-18,5);cx.lineTo(-17,WCY);cx.lineTo(-13,WCY);cx.lineTo(-14,5);cx.closePath();cx.fill();
-  cx.beginPath();cx.moveTo(9,-6);cx.lineTo(18,5);cx.lineTo(14,8);cx.lineTo(5,-3);cx.closePath();cx.fill();
-  cx.beginPath();cx.moveTo(18,5);cx.lineTo(17,WCY);cx.lineTo(13,WCY);cx.lineTo(14,5);cx.closePath();cx.fill();
-  // Zapatillas
+  // ═══ RIDER (postura de ataque DH — cuerpo inclinado, codos arriba) ══
+
+  // ── PIERNAS en posición de pedaleo activo ──────────────────────────
+  // Muslo izquierdo (más arriba, pedaleando)
+  cx.fillStyle='#1e2a3a';   // lycra azul oscuro
+  cx.beginPath();cx.moveTo(-8,-8);cx.lineTo(-22,4);cx.lineTo(-17,8);cx.lineTo(-4,-4);cx.closePath();cx.fill();
+  // Espinilla izquierda
+  cx.beginPath();cx.moveTo(-22,4);cx.lineTo(-20,WCY+2);cx.lineTo(-15,WCY);cx.lineTo(-17,4);cx.closePath();cx.fill();
+  // Muslo derecho (abajo, empujando pedal)
+  cx.beginPath();cx.moveTo(8,-4);cx.lineTo(20,8);cx.lineTo(16,12);cx.lineTo(4,0);cx.closePath();cx.fill();
+  // Espinilla derecha
+  cx.beginPath();cx.moveTo(20,8);cx.lineTo(19,WCY+2);cx.lineTo(14,WCY);cx.lineTo(15,8);cx.closePath();cx.fill();
+  // Zapatillas SPD (flat, anchas)
   cx.fillStyle='#111';
-  cx.beginPath();cx.moveTo(-20,WCY-3);cx.lineTo(-10,WCY-3);cx.lineTo(-9,WCY+1);cx.lineTo(-21,WCY+1);cx.closePath();cx.fill();
-  cx.beginPath();cx.moveTo(20,WCY-3);cx.lineTo(10,WCY-3);cx.lineTo(9,WCY+1);cx.lineTo(21,WCY+1);cx.closePath();cx.fill();
-  cx.fillStyle='#a8472a';cx.fillRect(-20,WCY-3,4,3);cx.fillRect(17,WCY-3,4,3);
-  // Pedales
-  cx.fillStyle='#555';cx.fillRect(-21,WCY-5,10,2.5);cx.fillRect(12,WCY-5,10,2.5);
+  cx.beginPath();cx.moveTo(-24,WCY);cx.lineTo(-12,WCY);cx.lineTo(-11,WCY+4);cx.lineTo(-25,WCY+4);cx.closePath();cx.fill();
+  cx.beginPath();cx.moveTo(22,WCY);cx.lineTo(10,WCY);cx.lineTo(9,WCY+4);cx.lineTo(23,WCY+4);cx.closePath();cx.fill();
+  cx.fillStyle='#c8582a';cx.fillRect(-24,WCY,5,3);cx.fillRect(19,WCY,5,3);
+  // Pedales planos MTB
+  cx.fillStyle='#333';cx.fillRect(-25,WCY-3,12,3);cx.fillRect(14,WCY-3,12,3);
+  cx.strokeStyle='#555';cx.lineWidth=0.8;
+  for(var pp=-3;pp<3;pp++){cx.beginPath();cx.moveTo(-25+pp*2,WCY-3);cx.lineTo(-25+pp*2,WCY);cx.stroke();}
+  for(var pp=-3;pp<3;pp++){cx.beginPath();cx.moveTo(14+pp*2+6,WCY-3);cx.lineTo(14+pp*2+6,WCY);cx.stroke();}
 
-  // ── CUERPO ──
-  cx.fillStyle='#241a12';
-  cx.beginPath();cx.moveTo(-10,-4);cx.lineTo(10,-4);cx.lineTo(8,3);cx.lineTo(-8,3);cx.closePath();cx.fill();
-  // Jersey — color vivo para identificarlo rápido
-  cx.fillStyle='#a8472a';
-  cx.beginPath();cx.moveTo(-11,-4);cx.lineTo(11,-4);cx.lineTo(10,-22);cx.lineTo(-10,-22);cx.closePath();cx.fill();
-  cx.fillStyle='#7a3018';
-  cx.beginPath();cx.moveTo(-11,-4);cx.lineTo(-10,-22);cx.lineTo(-6,-22);cx.lineTo(-7,-4);cx.closePath();cx.fill();
-  cx.beginPath();cx.moveTo(11,-4);cx.lineTo(10,-22);cx.lineTo(6,-22);cx.lineTo(7,-4);cx.closePath();cx.fill();
-  // Dorsal
-  cx.fillStyle='rgba(255,255,255,.88)';cx.fillRect(-4,-18,8,8);
-  cx.fillStyle='#a8472a';cx.font='bold 6px monospace';cx.textAlign='center';cx.fillText('1',0,-12);
-
-  // ── BRAZOS ──
-  cx.strokeStyle='#a8472a';cx.lineWidth=6;cx.lineCap='round';
-  cx.beginPath();cx.moveTo(-10,-21);cx.quadraticCurveTo(-15,-17,-19,-12);cx.stroke();
-  cx.strokeStyle='#7a3018';cx.lineWidth=3.5;
-  cx.beginPath();cx.moveTo(-10,-21);cx.quadraticCurveTo(-15,-17,-19,-12);cx.stroke();
-  cx.strokeStyle='#a8472a';cx.lineWidth=6;
-  cx.beginPath();cx.moveTo(10,-21);cx.quadraticCurveTo(15,-17,19,-12);cx.stroke();
-  cx.strokeStyle='#7a3018';cx.lineWidth=3.5;
-  cx.beginPath();cx.moveTo(10,-21);cx.quadraticCurveTo(15,-17,19,-12);cx.stroke();
-  // Guantes
+  // ── CUERPO — inclinado forward (postura de ataque MTB) ─────────────
+  // Shorts / bibs negros
   cx.fillStyle='#1a1a1a';
-  cx.beginPath();cx.arc(-19,-12,3.5,0,Math.PI*2);cx.fill();
-  cx.beginPath();cx.arc(19,-12,3.5,0,Math.PI*2);cx.fill();
-  // Manubrio (gira con steering)
-  cx.strokeStyle='#555';cx.lineWidth=4;
-  cx.beginPath();cx.moveTo(-21,-11+steer*8);cx.lineTo(21,-11-steer*8);cx.stroke();
-  cx.strokeStyle='#888';cx.lineWidth=2;
-  cx.beginPath();cx.moveTo(-21,-11+steer*8);cx.lineTo(21,-11-steer*8);cx.stroke();
+  cx.beginPath();cx.moveTo(-11,-4);cx.lineTo(11,-4);cx.lineTo(9,4);cx.lineTo(-9,4);cx.closePath();cx.fill();
+  // Jersey MTB — cuerpo inclinado: los hombros están adelante del asiento
+  // Torso más horizontal (90° menos que recto)
+  cx.fillStyle='#2a5a8a';    // azul MTB
+  cx.beginPath();
+  cx.moveTo(-12,-4);cx.lineTo(12,-4);   // cintura
+  cx.lineTo(14,-24);cx.lineTo(-14,-24); // hombros (más anchos)
+  cx.closePath();cx.fill();
+  // Franja lateral
+  cx.fillStyle='#1a3a5a';
+  cx.beginPath();cx.moveTo(-14,-24);cx.lineTo(-12,-4);cx.lineTo(-7,-4);cx.lineTo(-9,-24);cx.closePath();cx.fill();
+  cx.beginPath();cx.moveTo(14,-24);cx.lineTo(12,-4);cx.lineTo(7,-4);cx.lineTo(9,-24);cx.closePath();cx.fill();
+  // Franja naranja pecho
+  cx.fillStyle='#c8582a';cx.fillRect(-14,-24,28,4);
+  // Dorsal blanco en la espalda
+  cx.fillStyle='rgba(255,255,255,.9)';cx.fillRect(-5,-20,10,9);
+  cx.fillStyle='#2a5a8a';cx.font='bold 6px monospace';cx.textAlign='center';cx.fillText('1',0,-13);
+  // Cuello / cuello base del casco
+  cx.fillStyle='#caa07a';cx.beginPath();cx.ellipse(0,-24,4,3,0,0,Math.PI*2);cx.fill();
+
+  // ── BRAZOS — codos arriba (postura DH agresiva) ───────────────────
+  // Brazo izquierdo: hombro → codo alto → mano al manubrio
+  cx.strokeStyle='#2a5a8a';cx.lineWidth=7;cx.lineCap='round';
+  cx.beginPath();cx.moveTo(-13,-22);cx.quadraticCurveTo(-26,-22,-28,-8+steer*10);cx.stroke();
+  cx.strokeStyle='#1a3a5a';cx.lineWidth=4;
+  cx.beginPath();cx.moveTo(-13,-22);cx.quadraticCurveTo(-26,-22,-28,-8+steer*10);cx.stroke();
+  // Brazo derecho
+  cx.strokeStyle='#2a5a8a';cx.lineWidth=7;
+  cx.beginPath();cx.moveTo(13,-22);cx.quadraticCurveTo(26,-22,28,-8-steer*10);cx.stroke();
+  cx.strokeStyle='#1a3a5a';cx.lineWidth=4;
+  cx.beginPath();cx.moveTo(13,-22);cx.quadraticCurveTo(26,-22,28,-8-steer*10);cx.stroke();
+  // Guantes negros
+  cx.fillStyle='#111';
+  cx.beginPath();cx.ellipse(-28,-8+steer*10,4.5,3.5,0,0,Math.PI*2);cx.fill();
+  cx.beginPath();cx.ellipse(28,-8-steer*10,4.5,3.5,0,0,Math.PI*2);cx.fill();
+
+  // ── CASCO FULL-FACE MTB (más redondo que MX, sin pico exagerado) ───
+  var HC=-36;
+  // Shell base — redondo y voluminoso
+  cx.fillStyle='#2a5a8a';
+  cx.beginPath();cx.ellipse(0,HC,13,14,0,0,Math.PI*2);cx.fill();
+  // Parte superior blanca
+  cx.fillStyle='#e8e8e8';
+  cx.beginPath();cx.ellipse(0,HC,13,14,0,Math.PI,Math.PI*2);cx.fill();
+  // Franja naranja
+  cx.fillStyle='#c8582a';cx.fillRect(-13,HC-1,26,4);
+  // Visera corta (estilo enduro MTB — no tan larga como MX)
+  cx.fillStyle='#111';
+  cx.beginPath();cx.moveTo(-13,HC-11);cx.lineTo(-12,HC-17);cx.lineTo(12,HC-17);cx.lineTo(13,HC-11);cx.closePath();cx.fill();
+  // Chin guard redondeado (full face MTB)
+  cx.fillStyle='#1e1e1e';
+  cx.beginPath();cx.moveTo(-10,HC+10);cx.lineTo(-12,HC+17);cx.lineTo(12,HC+17);cx.lineTo(10,HC+10);cx.closePath();cx.fill();
   cx.fillStyle='#2a2a2a';
-  cx.beginPath();cx.arc(-21,-11+steer*8,3.5,0,Math.PI*2);cx.fill();
-  cx.beginPath();cx.arc(21,-11-steer*8,3.5,0,Math.PI*2);cx.fill();
-
-  // ── CASCO INTEGRAL MX ──
-  var HC=-32;
-  cx.fillStyle='#e8e8e8';cx.beginPath();cx.ellipse(0,HC,12,13,0,0,Math.PI*2);cx.fill();
-  cx.fillStyle='#a8472a';cx.beginPath();cx.ellipse(0,HC,12,13,0,Math.PI,Math.PI*2);cx.fill();
-  cx.fillStyle='#4ab840';cx.fillRect(-12,HC,24,3.5);
-  // Visera MX
-  cx.fillStyle='#1a1a1a';
-  cx.beginPath();cx.moveTo(-13,HC-10);cx.lineTo(-15,HC-16);cx.lineTo(15,HC-16);cx.lineTo(13,HC-10);cx.closePath();cx.fill();
-  // Chin guard
-  cx.fillStyle='#ccc';
-  cx.beginPath();cx.moveTo(-8,HC+10);cx.lineTo(-10,HC+15);cx.lineTo(10,HC+15);cx.lineTo(8,HC+10);cx.closePath();cx.fill();
-  // Vents
+  cx.beginPath();cx.moveTo(-9,HC+10);cx.lineTo(-11,HC+16);cx.lineTo(11,HC+16);cx.lineTo(9,HC+10);cx.closePath();cx.fill();
+  // Goggle / visor oscuro
+  cx.fillStyle='rgba(0,0,0,.55)';
+  cx.beginPath();cx.moveTo(-11,HC-3);cx.lineTo(-13,HC+5);cx.lineTo(13,HC+5);cx.lineTo(11,HC-3);cx.closePath();cx.fill();
+  cx.fillStyle='rgba(100,160,220,.3)';
+  cx.beginPath();cx.moveTo(-10,HC-2);cx.lineTo(-12,HC+4);cx.lineTo(12,HC+4);cx.lineTo(10,HC-2);cx.closePath();cx.fill();
+  // Reflejo goggle
+  cx.fillStyle='rgba(255,255,255,.18)';
+  cx.beginPath();cx.moveTo(-8,HC-1);cx.lineTo(-9,HC+2);cx.lineTo(-2,HC+2);cx.lineTo(-1,HC-1);cx.closePath();cx.fill();
+  // Vents en top
   cx.fillStyle='rgba(0,0,0,.5)';
-  cx.fillRect(-5,HC-15,3,4);cx.fillRect(-1,HC-16,3,4);cx.fillRect(3,HC-15,3,4);
+  cx.fillRect(-5,HC-16,3,4);cx.fillRect(-1,HC-17,3,4);cx.fillRect(3,HC-16,3,4);
+
 
   cx.restore();
 }
@@ -764,9 +845,9 @@ function hud(){
   mctx.font='8px Arial';mctx.fillStyle='#aaa';
   mctx.fillText(best>0?('RECORD '+best+' KM'):'SIN RECORD AÚN',16,69);
 
-  // VIDAS — esquina superior derecha
-  woodPanel(mctx,W-112,8,104,30,7);
-  for(var i=0;i<3;i++)heartC(mctx,W-92+i*26,23,1.7,i<lives);
+  // VIDAS — piñones de transmisión
+  woodPanel(mctx,W-116,8,108,30,7);
+  for(var i=0;i<3;i++)sprocketC(mctx,W-98+i*30,23,10,i<lives);
 
   // VELOCIDAD + TURBO — panel único, etiqueta y barra separadas
   var spd=(speed-1.6)/3.2;
